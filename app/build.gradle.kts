@@ -20,6 +20,8 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = false
             }
