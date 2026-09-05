@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PouchStream Storage Portal</title>
+
+    <!-- Manrope Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
+    <link rel="stylesheet" href="/css/bootstrap.min.css">
+    <!-- Portal Behavior & OLED Utility Styles -->
+    <link rel="stylesheet" href="/css/portal.css">
+
+    <!-- Bootstrap 5 Bundle JS (Loaded prior to modules) -->
+    <script src="/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Ionicons Script (ESM and System fallbacks) -->
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+    <!-- Monaco Editor AMD Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+</head>
+<body>
+
+    <!-- Main Fixed Portal Layout -->
+    <div class="portal-wrapper">
+
+        <!-- Unified Top Utility Bar -->
+        <header class="portal-topbar d-flex align-items-stretch justify-content-between">
+            <div class="d-flex align-items-stretch">
+                <button class="portal-header-btn" id="btnToggleSidebar" type="button" title="Toggle Sidebar Navigation">
+                    <ion-icon name="menu"></ion-icon>
+                </button>
+                <div class="d-flex align-items-center ps-2 pe-3">
+                    <span class="navbar-brand mb-0 fs-5 fw-bold text-body text-truncate" style="letter-spacing: -0.02em;">
+                        PouchStream
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-stretch">
+                <div class="topbar-url-flush-container d-flex align-items-stretch">
+                    <input type="text" id="topbarServerUrl" class="topbar-url-flush-input" readonly value="Connecting..." aria-label="Server Address">
+                </div>
+                <button class="portal-header-btn border-start" id="btnCopyServerUrl" type="button" title="Copy server address to clipboard">
+                    <ion-icon name="copy"></ion-icon>
+                </button>
+            </div>
+        </header>
+
+        <!-- Portal Body (Fixed Sidebar + Main Area) -->
+        <div class="portal-body">
+
+            <!-- Left Fixed Sidebar -->
+            <aside class="portal-sidebar p-3 d-flex flex-column justify-content-between" id="portalSidebar">
+                <div>
+                    <div class="text-uppercase text-secondary fw-bold text-center tracking-wide mb-3 px-2" style="font-size: 0.8125rem; letter-spacing: 0.08em;">
+                        Categories
+                    </div>
+                    <nav class="nav flex-column gap-1 mb-3">
+                        <a href="#" class="sidebar-link active" data-category="all" title="View all files in directory">
+                            <ion-icon name="folder"></ion-icon>
+                            <span class="text-truncate">All Files</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="favorites" title="Starred favorites">
+                            <ion-icon name="star"></ion-icon>
+                            <span class="text-truncate">Favorites</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="recent" title="Recently opened">
+                            <ion-icon name="time"></ion-icon>
+                            <span class="text-truncate">Recent</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="video" title="Filter video media">
+                            <ion-icon name="videocam"></ion-icon>
+                            <span class="text-truncate">Videos</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="document" title="Filter documents and text">
+                            <ion-icon name="document-text"></ion-icon>
+                            <span class="text-truncate">Documents</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="image" title="Filter image files">
+                            <ion-icon name="image"></ion-icon>
+                            <span class="text-truncate">Images</span>
+                        </a>
+                        <a href="#" class="sidebar-link" data-category="audio" title="Filter audio streams">
+                            <ion-icon name="musical-notes"></ion-icon>
+                            <span class="text-truncate">Audio</span>
+                        </a>
+                    </nav>
+                </div>
+
+                <!-- Very Bottom of Sidebar: Settings Button -->
+                <div>
+                    <a href="#" class="sidebar-link" id="btnSidebarSettings" title="Application & Streaming Settings">
+                        <ion-icon name="settings"></ion-icon>
+                        <span class="text-truncate">Settings</span>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- Main Workspace Container -->
+            <main class="portal-main position-relative">
+
+                <!-- Single Unified Breadcrumbs & Operations Bar (No duplicate bars) -->
+                <div class="portal-toolbar d-flex align-items-stretch justify-content-between" id="portalToolbar">
+                    <!-- Breadcrumb Trail on Left -->
+                    <div class="d-flex align-items-center overflow-hidden me-auto px-3 py-1" id="breadcrumbWrapper">
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0 small" id="breadcrumbList">
+                                <li class="breadcrumb-item active" aria-current="page">Root</li>
+                            </ol>
+                        </nav>
+                    </div>
+
+                    <!-- Operations & Search on Right (Flush toolbar buttons) -->
+                    <div class="d-flex align-items-stretch">
+                        <div class="filter-flush-container d-flex align-items-stretch border-start" style="border-color: #495057 !important;">
+                            <span class="filter-icon-addon d-flex align-items-center justify-content-center text-secondary">
+                                <ion-icon name="search"></ion-icon>
+                            </span>
+                            <input type="search" class="filter-flush-input" id="searchInput" placeholder="Filter files..." aria-label="Filter">
+                        </div>
+
+                        <button type="button" class="portal-header-btn border-start" id="btnToolbarRefresh" title="Reload active directory content">
+                            <ion-icon name="refresh"></ion-icon>
+                        </button>
+
+                        <!-- Inline New Folder Curtain Box Container -->
+                        <div class="inline-curtain-container d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn border-start" id="btnToggleNewFolder" title="Create new subfolder">
+                                <ion-icon name="folder"></ion-icon>
+                                <span>New Folder</span>
+                            </button>
+                            <div class="inline-curtain-box d-none" id="curtainNewFolder">
+                                <div class="curtain-header px-3 py-2 border-bottom text-secondary small fw-semibold">Create Folder</div>
+                                <input type="text" class="curtain-flush-input" id="inputInlineFolderName" placeholder="Folder name...">
+                                <div class="curtain-btn-group border-top">
+                                    <button type="button" class="curtain-action-btn" id="btnCancelInlineFolder">Cancel</button>
+                                    <button type="button" class="curtain-action-btn curtain-action-btn-primary" id="btnConfirmInlineFolder">OK</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Inline New File Curtain Box Container -->
+                        <div class="inline-curtain-container d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn border-start" id="btnToggleNewFile" title="Create new text or code file">
+                                <ion-icon name="document"></ion-icon>
+                                <span>New File</span>
+                            </button>
+                            <div class="inline-curtain-box d-none" id="curtainNewFile">
+                                <div class="curtain-header px-3 py-2 border-bottom text-secondary small fw-semibold">Create File</div>
+                                <input type="text" class="curtain-flush-input" id="inputInlineFileName" placeholder="e.g. notes.txt, code.js">
+                                <div class="curtain-btn-group border-top">
+                                    <button type="button" class="curtain-action-btn" id="btnCancelInlineFile">Cancel</button>
+                                    <button type="button" class="curtain-action-btn curtain-action-btn-primary" id="btnConfirmInlineFile">OK</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="portal-header-btn portal-header-btn-primary border-start" data-bs-toggle="modal" data-bs-target="#uploadModal" title="Upload files to active directory">
+                            <ion-icon name="cloud-upload"></ion-icon>
+                            <span>Upload</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Bar — flush like toolbar (full-height border-start, merged count/clear on hover) -->
+                <div class="bulk-actions-bar d-none align-items-stretch justify-content-between border-bottom" id="bulkActionsBar" style="background-color:#070707; border-color:#495057 !important; height:42px;">
+                    <div class="d-flex align-items-stretch">
+                        <button type="button" class="portal-header-btn border-end" id="btnBulkCount" title="Hover to clear" style="min-width:120px; justify-content:center;">
+                            <span id="bulkSelectedCount">0 selected</span>
+                            <span id="bulkClearHover" class="d-none align-items-center gap-1"><ion-icon name="close"></ion-icon> Clear</span>
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-stretch">
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkDownload" title="Download selected"><ion-icon name="download"></ion-icon><span>Download</span></button>
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkMove" title="Move to folder"><ion-icon name="folder-open"></ion-icon><span>Move</span></button>
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkDelete" title="Delete selected"><ion-icon name="trash"></ion-icon><span>Delete</span></button>
+                    </div>
+                </div>
+
+                <!-- Drag & Drop Overlay -->
+                <div class="workspace-drop-overlay d-none flex-column align-items-center justify-content-center position-absolute top-0 start-0 w-100 h-100" id="workspaceDropOverlay" style="background:rgba(0,0,0,0.85); z-index:30; border:2px dashed #0d6efd;">
+                    <ion-icon name="cloud-upload" style="font-size:3rem; color:#0d6efd;"></ion-icon>
+                    <div class="fw-bold text-body mt-2">Drop files to upload</div>
+                    <div class="small text-secondary" id="workspaceDropLabel">to current folder</div>
+                    <div class="progress mt-3 d-none" id="workspaceDropProgressWrap" style="width:320px; height:6px;"><div class="progress-bar" id="workspaceDropProgress" style="width:0%"></div></div>
+                </div>
+
+                <!-- Keyboard Help Overlay -->
+                <div class="keyboard-help-overlay d-none position-absolute top-0 start-0 w-100 h-100 align-items-center justify-content-center" id="keyboardHelpOverlay" style="background:rgba(0,0,0,0.92); z-index:40; backdrop-filter:blur(6px);">
+                    <div class="bg-black border p-4" style="border-color:#495057 !important; max-width:560px; width:90%; max-height:80vh; overflow:auto;">
+                        <div class="d-flex justify-content-between align-items-center mb-3"><h6 class="mb-0 fw-bold">Keyboard Shortcuts <span class="text-secondary small">press ? to close</span></h6><button type="button" class="btn-close btn-close-white" id="btnCloseHelp"></button></div>
+                        <div class="row small g-2">
+                            <div class="col-6"><span class="badge bg-dark border me-1">?</span> Help</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Ctrl</span>+Click Multi-select</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Drag</span> Marquee select</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Arrows</span> Navigate</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Enter</span> Open</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">F2</span> Rename</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Space/K</span> Play/Pause</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">F</span> Fullscreen</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">M</span> Mute</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">C</span> Subtitles</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">J/L</span> Seek ±10s</div>
+                            <div class="col-6"><span class="badge bg-dark border me-1">Esc</span> Close viewer</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workspace Grid Area with High Density Table -->
+                <div class="portal-workspace position-relative" id="workspaceView">
+                    <!-- Selection Marquee Box (bounded strictly within workspace content area) -->
+                    <div id="selectionMarquee" class="selection-marquee d-none"></div>
+
+                    <!-- Centered Custom Spinner Loading Overlay (visible by default) -->
+                    <div id="tableLoadingIndicator" class="portal-loading-overlay">
+                        <span class="loader"></span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover table-dense table-fixed align-middle mb-0">
+                            <thead class="sticky-top">
+                                <tr class="small">
+                                    <th scope="col" class="text-center p-0" style="width:36px; vertical-align:middle;"><div style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; margin:0 auto;"><input type="checkbox" id="chkSelectAll" class="form-check-input m-0" title="Select all" style="width:16px; height:16px; margin:0; cursor:pointer;"></div></th>
+                                    <th scope="col" class="sortable-header" data-sort="name" style="padding-left:11px !important;">
+                                        Name <span class="sort-indicator ms-1" id="sortIndicatorName"></span>
+                                    </th>
+                                    <th scope="col" style="width: 100px;" class="sortable-header" data-sort="format">
+                                        Format <span class="sort-indicator ms-1" id="sortIndicatorFormat"></span>
+                                    </th>
+                                    <th scope="col" style="width: 110px;" class="sortable-header" data-sort="size">
+                                        Size <span class="sort-indicator ms-1" id="sortIndicatorSize"></span>
+                                    </th>
+                                    <th scope="col" style="width: 150px;" class="sortable-header" data-sort="lastModified">
+                                        Last Modified <span class="sort-indicator ms-1" id="sortIndicatorLastModified"></span>
+                                    </th>
+                                    <th scope="col" class="text-end" style="width: 175px;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fileTableBody">
+                                <!-- Populated dynamically by UI module -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Full In-Content Image Preview View (Full screen in content area only) -->
+                <div id="contentImageView" class="w-100 h-100 flex-column bg-black d-none position-relative user-select-none">
+                    <!-- Image Topbar with Gallery, Zoom, Transform, and Download Controls -->
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnCloseImage" title="Back to file list (Esc)">
+                                <ion-icon name="arrow-back"></ion-icon>
+                            </button>
+                            <a id="btnImageDownload" href="#" class="portal-header-btn portal-header-btn-primary border-start" title="Download File">
+                                <ion-icon name="download"></ion-icon>
+                                <span>Download</span>
+                            </a>
+
+                            <!-- Gallery Prev / Next Controls -->
+                            <button type="button" class="portal-header-btn border-start" id="btnImagePrev" title="Previous Picture (Left Arrow)">
+                                <ion-icon name="chevron-back"></ion-icon>
+                            </button>
+                            <span class="d-flex align-items-center px-2 small text-secondary fw-semibold border-start border-end tabular-nums" id="lblImageGalleryIndex">1 / 1</span>
+                            <button type="button" class="portal-header-btn" id="btnImageNext" title="Next Picture (Right Arrow)">
+                                <ion-icon name="chevron-forward"></ion-icon>
+                            </button>
+
+                            <!-- Zoom Controls -->
+                            <button type="button" class="portal-header-btn border-start" id="btnImageZoomOut" title="Zoom Out (-)">
+                                <ion-icon name="remove"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn border-start border-end" id="btnImageZoomReset" title="Toggle Fit / 100% / 200% (0)">
+                                <span class="small fw-bold tabular-nums" id="lblImageZoom">Fit</span>
+                            </button>
+                            <button type="button" class="portal-header-btn" id="btnImageZoomIn" title="Zoom In (+)">
+                                <ion-icon name="add"></ion-icon>
+                            </button>
+
+                            <!-- Transform & Rotation Controls -->
+                            <button type="button" class="portal-header-btn border-start" id="btnImageRotateLeft" title="Rotate Left 90°">
+                                <ion-icon name="arrow-undo"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn border-start" id="btnImageRotateRight" title="Rotate Right 90° (R)">
+                                <ion-icon name="arrow-redo"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn border-start" id="btnImageFlipH" title="Flip Horizontal (H)">
+                                <ion-icon name="swap-horizontal"></ion-icon>
+                            </button>
+
+                            <!-- Fullscreen -->
+                            <button type="button" class="portal-header-btn border-start" id="btnImageFullscreen" title="Toggle Fullscreen (F)">
+                                <ion-icon name="scan"></ion-icon>
+                            </button>
+                        </div>
+                        <!-- Resolution and Image filename at right end -->
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto gap-3">
+                            <span class="small text-secondary tabular-nums d-none d-md-inline" id="lblImageResolution"></span>
+                            <span class="fw-bold text-truncate text-body fs-6" id="imageTitle" title="Active Image">Image Preview</span>
+                        </div>
+                    </div>
+
+                    <!-- Image Stage Area with Transparent Checkerboard Support & Pan/Zoom Canvas -->
+                    <div class="image-stage flex-grow-1 position-relative d-flex align-items-center justify-content-center overflow-hidden bg-black" id="imageStage">
+                        <img id="imagePreviewElement" class="image-preview-target" alt="Preview" draggable="false" />
+                        <!-- Buffer/Loading Spinner Overlay -->
+                        <div class="video-buffer-spinner d-none" id="imageLoadingSpinner">
+                            <span class="loader"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Full In-Content Video Player View (Full screen in content area only) -->
+                <div id="contentVideoView" class="w-100 h-100 flex-column bg-black d-none position-relative">
+                    <!-- Video Topbar with 5 New Useful Options -->
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" id="videoTopBar" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnCloseVideo" title="Back to file list">
+                                <ion-icon name="arrow-back"></ion-icon>
+                            </button>
+                            <a id="btnVideoDownload" href="#" class="portal-header-btn portal-header-btn-primary border-start" title="Download File">
+                                <ion-icon name="download"></ion-icon>
+                                <span>Download</span>
+                            </a>
+
+                            <!-- 1. Loop Toggle -->
+                            <button type="button" class="portal-header-btn border-start" id="btnVideoLoopToggle" title="Toggle Loop (L)">
+                                <ion-icon name="repeat" id="iconVideoLoop"></ion-icon>
+                                <span class="d-none d-md-inline" id="lblVideoLoop">Loop: Off</span>
+                            </button>
+
+                            <!-- 2. Fit / Fill Aspect Ratio Mode -->
+                            <button type="button" class="portal-header-btn border-start" id="btnVideoFitToggle" title="Aspect Ratio Fit/Fill (Fit, Fill, Stretch, 16:9, 4:3)">
+                                <ion-icon name="crop"></ion-icon>
+                                <span class="d-none d-md-inline" id="lblVideoFit">Fit</span>
+                            </button>
+
+                            <!-- 3. Screenshot / Snapshot Frame -->
+                            <button type="button" class="portal-header-btn border-start" id="btnVideoSnapshot" title="Take Screenshot (S)">
+                                <ion-icon name="camera"></ion-icon>
+                                <span class="d-none d-md-inline">Snapshot</span>
+                            </button>
+
+                            <!-- 4. Copy Stream Link -->
+                            <button type="button" class="portal-header-btn border-start" id="btnVideoCopyLink" title="Copy Stream URL to Clipboard">
+                                <ion-icon name="link" id="iconVideoCopyLink"></ion-icon>
+                                <span class="d-none d-md-inline">Copy Link</span>
+                            </button>
+
+                            <!-- 5. Video Info / Stats -->
+                            <button type="button" class="portal-header-btn border-start" id="btnVideoInfo" title="Video Media Details">
+                                <ion-icon name="information-circle"></ion-icon>
+                                <span class="d-none d-md-inline">Stats</span>
+                            </button>
+                        </div>
+                        <!-- Video filename at right end with increased font size -->
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto">
+                            <span class="fw-bold text-truncate text-body fs-6" id="videoTitle" title="Active Video">Video Playback</span>
+                        </div>
+                    </div>
+
+                    <!-- Video Container & Stage Area -->
+                    <div class="custom-video-stage flex-grow-1 position-relative d-flex align-items-center justify-content-center overflow-hidden bg-black" id="videoStage">
+                        <video id="videoPlayer" class="w-100 h-100" style="object-fit: contain;" preload="metadata" playsinline>
+                            Your browser cannot stream this video format.
+                        </video>
+
+                        <!-- Buffering Loading Spinner Overlay -->
+                        <div class="video-buffer-spinner d-none" id="videoBufferSpinner">
+                            <span class="loader"></span>
+                        </div>
+
+                        <!-- Center Play/Pause Overlay Flash -->
+                        <div class="video-center-indicator d-none" id="videoCenterIndicator">
+                            <ion-icon name="play" id="videoCenterIndicatorIcon"></ion-icon>
+                        </div>
+
+                        <!-- Floating Dynamic Subtitle Display Overlay (Moves smoothly with bottom controls bar) -->
+                        <div class="video-subtitle-overlay d-none" id="videoSubtitleOverlay">
+                            <span class="video-subtitle-text" id="videoSubtitleText"></span>
+                        </div>
+                    </div>
+
+                    <!-- Custom Clean & Flush Video Controls Bar sitting above the video with blurred background -->
+                    <div class="custom-video-controls d-flex flex-column" id="videoControlsBar">
+                        <!-- Progress Scrubber Bar -->
+                        <div class="video-progress-container position-relative" id="videoProgressContainer" title="Seek">
+                            <div class="video-progress-buffered" id="videoProgressBuffered"></div>
+                            <div class="video-progress-played" id="videoProgressPlayed"></div>
+                            <div class="video-progress-thumb" id="videoProgressThumb"></div>
+                        </div>
+
+                        <!-- Bottom Controls Bar -->
+                        <div class="d-flex align-items-stretch justify-content-between video-controls-bottom-bar">
+                            <!-- Left Controls Group -->
+                            <div class="d-flex align-items-stretch">
+                                <button type="button" class="portal-header-btn" id="btnVideoPlayPause" title="Play/Pause (Space / K)">
+                                    <ion-icon name="play" id="iconVideoPlayPause"></ion-icon>
+                                </button>
+                                <button type="button" class="portal-header-btn border-start" id="btnVideoSkipBack" title="Rewind 10s (Left Arrow / J)">
+                                    <ion-icon name="play-back"></ion-icon>
+                                </button>
+                                <button type="button" class="portal-header-btn border-start" id="btnVideoSkipForward" title="Forward 10s (Right Arrow / L)">
+                                    <ion-icon name="play-forward"></ion-icon>
+                                </button>
+
+                                <!-- Vertical Volume Dropup Control -->
+                                <div class="dropup d-flex align-items-stretch position-relative border-start">
+                                    <button class="portal-header-btn dropdown-toggle video-volume-btn" type="button" id="btnVideoVolumeDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Volume">
+                                        <ion-icon name="volume-high" id="iconVideoVolume"></ion-icon>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-dark shadow border p-2 m-0 dropup-curtain video-volume-dropdown-menu" aria-labelledby="btnVideoVolumeDropdown" style="background-color: rgba(10, 10, 10, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-color: #495057 !important; height: 150px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-between h-100 py-1">
+                                            <button type="button" class="btn btn-sm btn-link text-secondary p-0 border-0 text-decoration-none" id="btnVideoMuteToggle" title="Mute/Unmute">
+                                                <ion-icon name="volume-high" id="iconVideoVolumePopup" style="font-size: 1.1rem;"></ion-icon>
+                                            </button>
+                                            <div class="volume-slider-vertical-container">
+                                                <input type="range" class="custom-nub-slider volume-slider-vertical" id="videoVolumeSlider" min="0" max="1" step="0.01" value="1" title="Volume">
+                                            </div>
+                                            <span class="small text-secondary tabular-nums fw-bold" id="lblVideoVolumePercent" style="font-size: 0.6875rem;">100%</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Time Stamp -->
+                                <div class="d-flex align-items-center px-3 border-start small text-secondary tabular-nums" id="videoTimeDisplay">
+                                    <span id="videoCurrentTime">0:00</span>
+                                    <span class="mx-1">/</span>
+                                    <span id="videoDuration">0:00</span>
+                                </div>
+                            </div>
+
+                            <!-- Right Controls Group -->
+                            <div class="d-flex align-items-stretch">
+                                <!-- Audio Tracks Dropup -->
+                                <div class="dropup d-flex align-items-stretch position-relative">
+                                    <button class="portal-header-btn border-start dropdown-toggle video-audio-btn" type="button" id="btnVideoAudioDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Audio Tracks">
+                                        <ion-icon name="headset"></ion-icon>
+                                        <span id="videoAudioLabel" class="d-none d-md-inline ms-1 small">Audio</span>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-dark shadow border p-0 m-0 dropdown-menu-end dropup-curtain video-audio-dropdown-menu" aria-labelledby="btnVideoAudioDropdown" style="background-color: rgba(10, 10, 10, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-color: #495057 !important; min-width: 200px;">
+                                        <div class="px-3 py-2 small text-secondary fw-bold border-bottom" style="border-color: #495057 !important;">Audio Tracks</div>
+                                        <div id="videoAudioList">
+                                            <button class="portal-context-menu-item active fw-bold" type="button" data-audio-id="default">Default Track</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Subtitles & Captions Dropup -->
+                                <div class="dropup d-flex align-items-stretch position-relative">
+                                    <button class="portal-header-btn border-start dropdown-toggle video-subs-btn" type="button" id="btnVideoSubsDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Subtitles / Captions (C)">
+                                        <ion-icon name="chatbox-ellipses-outline" id="iconVideoSubs"></ion-icon>
+                                        <span id="videoSubsLabel" class="d-none d-md-inline ms-1 small">CC</span>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-dark shadow border p-0 m-0 dropdown-menu-end dropup-curtain video-subs-dropdown-menu" aria-labelledby="btnVideoSubsDropdown" style="background-color: rgba(10, 10, 10, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-color: #495057 !important; min-width: 240px; max-height: 320px; overflow-y: auto;">
+                                        <div class="px-3 py-2 small text-secondary fw-bold border-bottom" style="border-color: #495057 !important;">Subtitles &amp; Captions</div>
+                                        <div id="videoSubsList">
+                                            <button class="portal-context-menu-item active fw-bold" type="button" data-sub-id="off">Off</button>
+                                        </div>
+                                        <div class="border-top" style="border-color: #495057 !important;">
+                                            <label class="portal-context-menu-item mb-0 cursor-pointer d-flex align-items-center gap-2" title="Load custom subtitle (.srt/.vtt) from device">
+                                                <ion-icon name="cloud-upload"></ion-icon>
+                                                <span>Load Subtitle File...</span>
+                                                <input type="file" id="videoSubFileInput" accept=".srt,.vtt,.sub,.ass,.txt" class="d-none" />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Playback Speed Dropup -->
+                                <div class="dropup d-flex align-items-stretch position-relative">
+                                    <button class="portal-header-btn border-start dropdown-toggle video-speed-btn" type="button" id="btnVideoSpeedDropdown" data-bs-toggle="dropdown" aria-expanded="false" title="Playback Speed">
+                                        <span id="videoSpeedLabel" class="fw-bold small">1.0x</span>
+                                    </button>
+                                    <div class="dropdown-menu dropdown-menu-dark shadow border p-0 m-0 dropdown-menu-end dropup-curtain video-speed-dropdown-menu" aria-labelledby="btnVideoSpeedDropdown" style="background-color: rgba(10, 10, 10, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-color: #495057 !important;">
+                                        <button class="portal-context-menu-item speed-item" type="button" data-speed="0.5">0.5x</button>
+                                        <button class="portal-context-menu-item speed-item" type="button" data-speed="0.75">0.75x</button>
+                                        <button class="portal-context-menu-item speed-item active fw-bold" type="button" data-speed="1.0">1.0x</button>
+                                        <button class="portal-context-menu-item speed-item" type="button" data-speed="1.25">1.25x</button>
+                                        <button class="portal-context-menu-item speed-item" type="button" data-speed="1.5">1.5x</button>
+                                        <button class="portal-context-menu-item speed-item" type="button" data-speed="2.0">2.0x</button>
+                                    </div>
+                                </div>
+
+                                <!-- Picture in Picture -->
+                                <button type="button" class="portal-header-btn border-start" id="btnVideoPiP" title="Picture in Picture (P)">
+                                    <ion-icon name="tv"></ion-icon>
+                                </button>
+
+                                <!-- Fullscreen Toggle -->
+                                <button type="button" class="portal-header-btn border-start" id="btnVideoFullscreen" title="Fullscreen (F)">
+                                    <ion-icon name="scan" id="iconVideoFullscreen"></ion-icon>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Full In-Content Text Editor View (Full screen in content area only) -->
+                <div id="contentEditorView" class="w-100 h-100 flex-column bg-black d-none">
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnCloseEditor" title="Back to file list">
+                                <ion-icon name="arrow-back"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn portal-header-btn-primary border-start" id="btnEditorSave" title="Save changes to disk (Ctrl+S)">
+                                <ion-icon name="save"></ion-icon>
+                                <span>Save File</span>
+                            </button>
+                            <!-- Editor Options Dropdown -->
+                            <div class="dropdown d-flex align-items-stretch position-relative">
+                                <button class="portal-header-btn border-start dropdown-toggle" type="button" id="editorOptionsDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Editor Options">
+                                    <ion-icon name="settings"></ion-icon>
+                                    <span>Options</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-dark shadow border p-0 m-0" aria-labelledby="editorOptionsDropdown" style="background-color: #0a0a0a; border-color: #495057 !important; min-width: 300px;">
+                                    <!-- Font Size Option -->
+                                    <div class="p-3 border-bottom" style="border-color: #495057 !important;">
+                                        <label class="form-label small text-secondary fw-semibold mb-2 d-block">Editor Text Size</label>
+                                        <div class="d-flex align-items-stretch border" style="height: 32px; border-color: #495057 !important;">
+                                            <button type="button" class="portal-header-btn px-3" id="btnFontSizeDec" title="Decrease font size">
+                                                <ion-icon name="remove"></ion-icon>
+                                            </button>
+                                            <span class="d-flex align-items-center justify-content-center flex-grow-1 text-body fw-bold border-start border-end" id="lblEditorFontSize" style="background-color: #000000; border-color: #495057 !important; font-size: 0.8125rem;">13px</span>
+                                            <button type="button" class="portal-header-btn px-3" id="btnFontSizeInc" title="Increase font size">
+                                                <ion-icon name="add"></ion-icon>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <!-- Monaco Theme Option -->
+                                    <div class="p-3">
+                                        <label for="selectMonacoTheme" class="form-label small text-secondary fw-semibold mb-2 d-block">Theme</label>
+                                        <div class="d-flex align-items-stretch border" style="height: 32px; border-color: #495057 !important;">
+                                            <button class="portal-header-btn px-2" type="button" id="btnPrevTheme" title="Previous theme">
+                                                <ion-icon name="chevron-back"></ion-icon>
+                                            </button>
+                                            <select class="form-select form-select-sm bg-black text-body border-0 border-start border-end rounded-0" id="selectMonacoTheme" style="border-color: #495057 !important; font-size: 0.8125rem; box-shadow: none;">
+                                                <option value="oled-black" selected>OLED Black</option>
+                                                <option value="vs-dark">VS Dark</option>
+                                                <option value="hc-black">High Contrast Dark</option>
+                                                <option value="vs">VS Light</option>
+                                                <option value="hc-light">High Contrast Light</option>
+                                            </select>
+                                            <button class="portal-header-btn px-2" type="button" id="btnNextTheme" title="Next theme">
+                                                <ion-icon name="chevron-forward"></ion-icon>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Filename at right end with increased font size -->
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto">
+                            <span class="fw-bold text-truncate text-body fs-6" id="editorModalTitle" title="Active File">File Editor</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 overflow-hidden position-relative bg-black">
+                        <div id="monacoEditorContainer" class="w-100 h-100"></div>
+                        <textarea id="editorTextarea" class="form-control border-0 h-100 p-3 rounded-0 bg-black text-light d-none" style="resize: none; font-size: 0.8125rem; line-height: 1.5;" placeholder="Load record contents..."></textarea>
+                    </div>
+                    <div class="px-3 py-1 border-top flex-shrink-0 d-flex justify-content-between small text-secondary" style="background-color: #050505; border-color: #495057 !important;">
+                        <div class="text-truncate me-2" id="editorModalPath">/</div>
+                        <div id="editorMetrics">Lines: 0 | Characters: 0</div>
+                    </div>
+                </div>
+
+                <!-- Full In-Content Settings View (Clean, Flush, Minimalist) -->
+                <div id="contentSettingsView" class="w-100 h-100 flex-column bg-black d-none">
+                    <!-- Settings Toolbar -->
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnCloseSettings" title="Back to file manager">
+                                <ion-icon name="arrow-back"></ion-icon>
+                                <span>Back</span>
+                            </button>
+                        </div>
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto">
+                            <span class="fw-bold text-truncate text-body fs-6">Application Settings</span>
+                        </div>
+                    </div>
+
+                    <!-- Settings Body Content -->
+                    <div class="flex-grow-1 overflow-auto p-4" style="background-color: #030303;">
+                        <div class="mx-auto" style="max-width: 720px;">
+
+                            <!-- Section 1: Server & Network -->
+                            <div class="mb-4">
+                                <div class="settings-section-header">
+                                    <ion-icon name="server-outline"></ion-icon>
+                                    <span>Server &amp; Network</span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <div class="settings-row-item">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Server Network Port</div>
+                                            <div class="text-secondary small">TCP listener port on host device</div>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-dark border text-body px-2 py-1 font-monospace" id="settingsServerPort">8080</span>
+                                        </div>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Live Polling Rate</div>
+                                            <div class="text-secondary small">Interval for syncing filesystem directory changes</div>
+                                        </div>
+                                        <select class="form-select form-select-sm bg-black text-body border rounded-0" id="settingPollingRate" style="width: 170px; border-color: #495057 !important; font-size: 0.8125rem;">
+                                            <option value="1000">1.0s (Fast)</option>
+                                            <option value="2500" selected>2.5s (Default)</option>
+                                            <option value="5000">5.0s (Balanced)</option>
+                                            <option value="10000">10.0s (Slow)</option>
+                                            <option value="0">Disabled</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 2: Text & Code Editor -->
+                            <div class="mb-4">
+                                <div class="settings-section-header">
+                                    <ion-icon name="code-slash-outline"></ion-icon>
+                                    <span>Text &amp; Code Editor</span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <div class="settings-row-item">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Editor Theme</div>
+                                            <div class="text-secondary small">Color theme for Monaco Code Editor</div>
+                                        </div>
+                                        <select class="form-select form-select-sm bg-black text-body border rounded-0" id="settingEditorTheme" style="width: 170px; border-color: #495057 !important; font-size: 0.8125rem;">
+                                            <option value="oled-black" selected>OLED Black</option>
+                                            <option value="vs-dark">VS Dark</option>
+                                            <option value="hc-black">High Contrast Dark</option>
+                                            <option value="vs">VS Light</option>
+                                            <option value="hc-light">High Contrast Light</option>
+                                        </select>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Editor Font Size</div>
+                                            <div class="text-secondary small">Default code viewing and editing size</div>
+                                        </div>
+                                        <select class="form-select form-select-sm bg-black text-body border rounded-0" id="settingEditorFontSize" style="width: 170px; border-color: #495057 !important; font-size: 0.8125rem;">
+                                            <option value="11">11 px</option>
+                                            <option value="12">12 px</option>
+                                            <option value="13" selected>13 px (Default)</option>
+                                            <option value="14">14 px</option>
+                                            <option value="15">15 px</option>
+                                            <option value="16">16 px</option>
+                                            <option value="18">18 px</option>
+                                            <option value="20">20 px</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Section 3: Video Playback Preferences -->
+                            <div class="mb-4">
+                                <div class="settings-section-header">
+                                    <ion-icon name="videocam-outline"></ion-icon>
+                                    <span>Video Playback Preferences</span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <button type="button" class="settings-row-item" id="rowSettingAutoplay">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Default Autoplay</div>
+                                            <div class="text-secondary small">Automatically start playing when opening a video</div>
+                                        </div>
+                                        <label class="m3-switch" onclick="event.stopPropagation()">
+                                            <input type="checkbox" id="settingAutoplay" checked>
+                                            <span class="m3-switch-track">
+                                                <span class="m3-switch-thumb"></span>
+                                            </span>
+                                        </label>
+                                    </button>
+                                    <button type="button" class="settings-row-item" id="rowSettingControlsAutoHide">
+                                        <div>
+                                            <div class="fw-semibold text-body small">Controls Auto-Hide</div>
+                                            <div class="text-secondary small">Slide out bottom controls overlay after 1 second of inactivity</div>
+                                        </div>
+                                        <label class="m3-switch" onclick="event.stopPropagation()">
+                                            <input type="checkbox" id="settingControlsAutoHide" checked>
+                                            <span class="m3-switch-track">
+                                                <span class="m3-switch-thumb"></span>
+                                            </span>
+                                        </label>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Section 4: About & System Host Information -->
+                            <div class="mb-4">
+                                <div class="settings-section-header">
+                                    <ion-icon name="information-circle-outline"></ion-icon>
+                                    <span>Host System &amp; Engine</span>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <div class="settings-row-item">
+                                        <span>PouchStream Version</span>
+                                        <span class="text-body fw-bold" id="settingsServerVersion">v2.0.0</span>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <span>Host Operating System</span>
+                                        <span class="text-body fw-bold" id="settingsHostOs">Android</span>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <span>Host Device Model</span>
+                                        <span class="text-body" id="settingsHostDevice">Generic Device</span>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <span>Server Engine</span>
+                                        <span class="text-body" id="settingsServerEngine">Native Embedded NanoHTTPD Daemon</span>
+                                    </div>
+                                    <div class="settings-row-item">
+                                        <span>System Architecture</span>
+                                        <span class="text-body font-monospace small" id="settingsHostArch">aarch64</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fixed Bottom Statusbar -->
+                <footer class="portal-statusbar px-3 d-flex align-items-center justify-content-between text-secondary">
+                    <div class="d-flex align-items-center gap-2 overflow-hidden text-truncate">
+                        <span id="statusFolderStats">0 folders, 0 files (0 B)</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                        <span class="text-success">●</span>
+                        <span id="statusServerState">Server Active</span>
+                        <span>•</span>
+                        <span>HTTP 1.1</span>
+                    </div>
+                </footer>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 border-bottom">
+                    <h1 class="modal-title fs-6 text-body" id="uploadModalTitle">Upload Files</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-dropzone mb-3" id="uploadDropzone">
+                        <input class="d-none" type="file" id="inputUploadFiles" multiple>
+                        <ion-icon name="cloud-upload" style="font-size: 2.25rem;" class="text-secondary mb-2 d-block mx-auto"></ion-icon>
+                        <div class="small fw-semibold text-body mb-1">
+                            Drag &amp; drop files here, or <span class="text-primary text-decoration-underline">browse</span>
+                        </div>
+                        <div class="small text-secondary" id="uploadFilesSummary">No files selected</div>
+                    </div>
+                    <div class="d-none" id="uploadProgressContainer">
+                        <div class="d-flex justify-content-between small text-secondary mb-1">
+                            <span id="uploadStatusText" class="text-truncate me-2">Uploading...</span>
+                            <span id="uploadPercentText" class="fw-medium text-body">0%</span>
+                        </div>
+                        <div class="progress" style="height: 6px; background-color: #1a1a1a;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="uploadProgressBar" role="progressbar" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer-flush border-top">
+                    <button type="button" class="modal-flush-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="modal-flush-btn modal-flush-btn-primary" id="btnConfirmUpload">
+                        <ion-icon name="cloud-upload" class="me-1"></ion-icon> Upload
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Rename Modal -->
+    <div class="modal fade" id="renameModal" tabindex="-1" aria-labelledby="renameModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2 border-bottom">
+                    <h1 class="modal-title fs-6 text-body" id="renameModalTitle">Rename</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <label for="inputRename" class="form-label small text-secondary">New Name:</label>
+                    <input type="text" class="form-control form-control-sm" id="inputRename">
+                </div>
+                <div class="modal-footer py-1 border-top">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="btnConfirmRename">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header py-2 border-bottom">
+                    <h1 class="modal-title fs-6 text-danger" id="deleteModalTitle">Confirm Removal</h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body small text-secondary">
+                    Are you sure you want to delete <strong id="deleteItemName" class="text-body"></strong>? This cannot be undone.
+                </div>
+                <div class="modal-footer py-1 border-top">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-danger" id="btnConfirmDelete">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Properties Modal -->
+    <div class="modal fade" id="propertiesModal" tabindex="-1" aria-labelledby="propertiesModalTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header py-2 border-bottom">
+                    <h1 class="modal-title fs-6 text-body d-flex align-items-center gap-2" id="propertiesModalTitle">
+                        <ion-icon name="information-circle" class="text-primary"></ion-icon>
+                        <span id="propTitleText">Properties</span>
+                    </h1>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="d-flex align-items-center gap-3 p-3">
+                        <ion-icon name="folder" id="propTypeIcon" style="font-size: 2.5rem; color: #f59e0b;"></ion-icon>
+                        <div class="overflow-hidden">
+                            <h6 class="mb-1 text-truncate text-body fw-bold" id="propName">Directory Name</h6>
+                            <div class="small text-secondary text-truncate" id="propTypeDesc">Folder</div>
+                        </div>
+                    </div>
+                    <div class="border-top border-secondary-subtle"></div>
+                    <div class="row g-2 small p-3">
+                        <div class="col-4 text-secondary">Location:</div>
+                        <div class="col-8 text-body text-truncate" id="propLocation">/</div>
+                        <div class="col-4 text-secondary">Size:</div>
+                        <div class="col-8 text-body tabular-nums" id="propSize">—</div>
+                        <div class="col-4 text-secondary">Contains:</div>
+                        <div class="col-8 text-body" id="propContains">—</div>
+                        <div class="col-4 text-secondary">Last Modified:</div>
+                        <div class="col-8 text-body tabular-nums" id="propModified">—</div>
+                    </div>
+                </div>
+                <div class="modal-footer-flush border-top">
+                    <button type="button" class="modal-flush-btn" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fixed Toast Notification Stack -->
+    <div class="toast-container-fixed" id="toastStack"></div>
+
+    <!-- Custom Context Menu for Row Manipulation -->
+    <div id="rowContextMenu" class="portal-context-menu d-none">
+        <button type="button" class="portal-context-menu-item" data-action="open">
+            <ion-icon name="open"></ion-icon> Open
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="preview-image">
+            <ion-icon name="eye"></ion-icon> Preview Picture
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="stream">
+            <ion-icon name="play"></ion-icon> Stream Video
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="edit">
+            <ion-icon name="create"></ion-icon> Edit in Editor
+        </button>
+        <a href="#" class="portal-context-menu-item" data-action="download">
+            <ion-icon name="download"></ion-icon> Download
+        </a>
+        <div class="portal-context-menu-divider"></div>
+        <button type="button" class="portal-context-menu-item" data-action="rename">
+            <ion-icon name="pencil"></ion-icon> Rename
+        </button>
+        <button type="button" class="portal-context-menu-item text-danger" data-action="delete">
+            <ion-icon name="trash"></ion-icon> Delete
+        </button>
+        <div class="portal-context-menu-divider"></div>
+        <button type="button" class="portal-context-menu-item" data-action="properties">
+            <ion-icon name="information-circle"></ion-icon> Properties
+        </button>
+    </div>
+
+    <!-- Custom Context Menu for Empty Area -->
+    <div id="emptyAreaContextMenu" class="portal-context-menu d-none">
+        <button type="button" class="portal-context-menu-item" data-action="new-folder">
+            <ion-icon name="folder"></ion-icon> New Folder
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="new-file">
+            <ion-icon name="document"></ion-icon> New File
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="upload">
+            <ion-icon name="cloud-upload"></ion-icon> Upload Files
+        </button>
+        <div class="portal-context-menu-divider"></div>
+        <button type="button" class="portal-context-menu-item" data-action="refresh">
+            <ion-icon name="refresh"></ion-icon> Refresh
+        </button>
+        <div class="portal-context-menu-divider"></div>
+        <button type="button" class="portal-context-menu-item" data-action="properties">
+            <ion-icon name="information-circle"></ion-icon> Properties
+        </button>
+    </div>
+
+    <!-- Modular App Scripts -->
+    <script type="module" src="/js/app.js"></script>
+</body>
+</html>

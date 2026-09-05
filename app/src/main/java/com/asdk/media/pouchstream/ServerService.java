@@ -1,0 +1,427 @@
+package com.asdk.media.pouchstream;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
+import android.net.Uri;
+import android.net.wifi.WifiManager;
+import android.os.Build;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.widget.Toast;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.ServiceCompat;
+
+public class ServerService extends Service {
+
+    public static final String ACTION_START = "com.asdk.media.pouchstream.ACTION_START";
+    public static final String ACTION_STOP = "com.asdk.media.pouchstream.ACTION_STOP";
+    public static final String EXTRA_PORT = "extra_port";
+    public static final String EXTRA_FOLDER_URI = "extra_folder_uri";
+
+    private static final String CHANNEL_ID = "pouchstream_server_channel";
+    private static final int NOTIFICATION_ID = 1001;
+
+    public static final String PREFS_NAME = "pouchstream_prefs";
+    public static final String KEY_FOLDER_URI = "key_folder_uri";
+    public static final String KEY_FOLDER_NAME = "key_folder_name";
+    public static final String KEY_PORT = "key_port";
+    public static final String KEY_WAS_RUNNING = "key_was_running";
+    public static final String KEY_AUTO_START = "key_auto_start";
+    public static final String KEY_AUTH_ENABLED = "key_auth_enabled";
+    public static final String KEY_AUTH_USER = "key_auth_user";
+    public static final String KEY_AUTH_PASS = "key_auth_pass";
+    public static final String KEY_READ_ONLY = "key_read_only";
+    public static final String KEY_KEEP_AWAKE = "key_keep_awake";
+
+    public interface ServerListener {
+        void onServerStateChanged(boolean running, String url, String error);
+    }
+
+    private static ServerListener listener;
+    private static boolean running = false;
+    private static String serverUrl = "";
+    private static String lastError = null;
+
+    private PouchServer server;
+    private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
+
+    public static void setListener(ServerListener l) {
+        listener = l;
+        if (listener != null) {
+            listener.onServerStateChanged(running, serverUrl, lastError);
+        }
+    }
+
+    public static boolean isRunning() {
+        return running;
+    }
+
+    public static String getServerUrl() {
+        return serverUrl;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        createNotificationChannel();
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null) {
+            String action = intent.getAction();
+            if (ACTION_STOP.equals(action)) {
+                stopServer();
+                releaseWakeLock();
+                releaseWifiLock();
+                androidx.core.app.ServiceCompat.stopForeground(this, androidx.core.app.ServiceCompat.STOP_FOREGROUND_REMOVE);
+                stopSelf();
+                // clear persisted running flag
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_WAS_RUNNING, false).apply();
+                return START_NOT_STICKY;
+            }
+        }
+
+        // If service was killed and restarted with null intent, intent will be null.
+        // We still want to restart server if it was running before.
+        startServer(intent);
+        return START_STICKY;
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // Keep service alive when user swipes away from recents
+        // START_STICKY will handle restart, but on some OEMs we need explicit restart
+        if (running) {
+            Intent restartIntent = new Intent(getApplicationContext(), ServerService.class);
+            restartIntent.setAction(ACTION_START);
+            // Use stored prefs values for port/uri
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(restartIntent);
+            } else {
+                startService(restartIntent);
+            }
+        }
+        super.onTaskRemoved(rootIntent);
+    }
+
+    private void acquireWakeLock() {
+        if (wakeLock == null) {
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PouchStream::ServerWakelock");
+                wakeLock.setReferenceCounted(false);
+            }
+        }
+        if (wakeLock != null && !wakeLock.isHeld()) {
+            // 10 min timeout avoids indefinite wakelock (lint WakelockTimeout) - re-acquired if needed while running
+            wakeLock.acquire(10 * 60 * 1000L);
+            AppLogger.log("ServerService", "WakeLock acquired (10 min)");
+        }
+    }
+
+    private void releaseWakeLock() {
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+            AppLogger.log("ServerService", "WakeLock released");
+        }
+    }
+
+    private void acquireWifiLock() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_KEEP_AWAKE, false)) return;
+        if (wifiLock == null) {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wm != null) {
+                wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PouchStream::WifiLock");
+                wifiLock.setReferenceCounted(false);
+            }
+        }
+        if (wifiLock != null && !wifiLock.isHeld()) {
+            try {
+                wifiLock.acquire();
+                AppLogger.log("ServerService", "WifiLock acquired (HIGH_PERF)");
+            } catch (Exception e) {
+                AppLogger.log("ServerService", "WifiLock acquire failed: " + e.getMessage());
+            }
+        }
+    }
+
+    private void releaseWifiLock() {
+        if (wifiLock != null && wifiLock.isHeld()) {
+            try {
+                wifiLock.release();
+                AppLogger.log("ServerService", "WifiLock released");
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private void startServer(Intent intent) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        int port = 8080;
+        if (intent != null && intent.hasExtra(EXTRA_PORT)) {
+            port = intent.getIntExtra(EXTRA_PORT, 8080);
+        } else {
+            port = prefs.getInt(KEY_PORT, 8080);
+        }
+
+        String uriStr = null;
+        if (intent != null && intent.hasExtra(EXTRA_FOLDER_URI)) {
+            uriStr = intent.getStringExtra(EXTRA_FOLDER_URI);
+        } else {
+            uriStr = prefs.getString(KEY_FOLDER_URI, null);
+        }
+
+        // If still null after reboot/restart, prefs holds it
+        if (uriStr == null) {
+            uriStr = prefs.getString(KEY_FOLDER_URI, null);
+        }
+
+        Uri folderUri = uriStr != null ? Uri.parse(uriStr) : null;
+        if (folderUri == null) {
+            lastError = "No folder selected";
+            running = false;
+            serverUrl = "";
+            AppLogger.log("ServerService", "Cannot start server: no folder selected");
+            if (listener != null) {
+                listener.onServerStateChanged(false, "", lastError);
+            }
+            // Still show notification briefly? Better stop self
+            stopSelf();
+            return;
+        }
+
+        StorageHelper storage = new StorageHelper(this, folderUri);
+
+        stopServerSilently();
+
+        String ip = NetworkUtils.getLocalIpAddress(this);
+        serverUrl = "http://" + ip + ":" + port;
+
+        AppLogger.log("ServerService", "Starting server on " + serverUrl + " (folder: " + storage.getRootName() + ")");
+
+        // Promote to foreground IMMEDIATELY (required within ~5s on Android 14+)
+        // Build preliminary notification before server binds to avoid ANR/timeouts
+        Notification preliminary = buildNotification(serverUrl, storage.getRootName());
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(this, NOTIFICATION_ID, preliminary,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(NOTIFICATION_ID, preliminary);
+            }
+        } catch (Exception e) {
+            // Fallback if ServiceCompat fails (e.g. missing permission on Android 14)
+            try {
+                startForeground(NOTIFICATION_ID, preliminary);
+            } catch (Exception ignored) {}
+        }
+
+        acquireWakeLock();
+        acquireWifiLock();
+
+        int boundPort = -1;
+        Exception lastEx = null;
+        // Port fallback candidates if requested port is busy
+        int[] fallbackPorts = new int[]{port, 8081, 8000, 8888, 9000, 7000};
+        // Deduplicate and keep order: original first, then others
+        java.util.LinkedHashSet<Integer> candidates = new java.util.LinkedHashSet<>();
+        for (int p : fallbackPorts) candidates.add(p);
+        // Also try 0 (random) as last resort if all busy
+        boolean isPortBusyError = false;
+
+        for (int cand : candidates) {
+            try {
+                PouchServer tryServer = new PouchServer(this, storage, cand);
+                tryServer.start();
+                server = tryServer;
+                boundPort = cand;
+                lastEx = null;
+                break;
+            } catch (Exception e) {
+                lastEx = e;
+                String msg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+                isPortBusyError = msg.contains("in use") || msg.contains("eaddrinuse") || msg.contains("bind") || msg.contains("already");
+                if (!isPortBusyError) break; // non-port error, don't try others
+                AppLogger.log("ServerService", "Port " + cand + " busy, trying next: " + msg);
+                if (cand != port) {
+                    // close any partial
+                }
+            }
+        }
+
+        if (boundPort != -1 && server != null) {
+            // Update port if fallback used
+            if (boundPort != port) {
+                port = boundPort;
+                prefs.edit().putInt(KEY_PORT, port).apply();
+                String ip2 = NetworkUtils.getLocalIpAddress(this);
+                serverUrl = "http://" + ip2 + ":" + port;
+                AppLogger.log("ServerService", "Port conflict: switched to " + port);
+                final int toastPort = port;
+                new Handler(Looper.getMainLooper()).post(() ->
+                        Toast.makeText(getApplicationContext(), "Port busy, switched to " + toastPort, Toast.LENGTH_LONG).show());
+            }
+            running = true;
+            lastError = null;
+
+            prefs.edit().putBoolean(KEY_WAS_RUNNING, true).apply();
+
+            AppLogger.log("ServerService", "Server successfully bound to port " + port);
+
+            // Update notification with final URL (in case IP resolved late or port fallback)
+            Notification updated = buildNotification(serverUrl, storage.getRootName());
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.notify(NOTIFICATION_ID, updated);
+            }
+
+            if (listener != null) {
+                listener.onServerStateChanged(true, serverUrl, null);
+            }
+        } else {
+            running = false;
+            serverUrl = "";
+            lastError = lastEx != null && lastEx.getMessage() != null ? lastEx.getMessage() : "Failed to start server";
+            AppLogger.log("ServerService", "Error starting server: " + lastError, lastEx);
+            if (listener != null) {
+                listener.onServerStateChanged(false, "", lastError);
+            }
+            prefs.edit().putBoolean(KEY_WAS_RUNNING, false).apply();
+            releaseWakeLock();
+            releaseWifiLock();
+            try {
+                androidx.core.app.ServiceCompat.stopForeground(this, androidx.core.app.ServiceCompat.STOP_FOREGROUND_REMOVE);
+            } catch (Exception ignored) {}
+            stopSelf();
+        }
+    }
+
+    private void stopServerSilently() {
+        if (server != null) {
+            try {
+                server.stop();
+                AppLogger.log("ServerService", "Existing server instance stopped");
+            } catch (Exception ignored) {}
+            server = null;
+        }
+    }
+
+    private void stopServer() {
+        stopServerSilently();
+        running = false;
+        serverUrl = "";
+        AppLogger.log("ServerService", "Server stopped");
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_WAS_RUNNING, false).apply();
+        if (listener != null) {
+            listener.onServerStateChanged(false, "", null);
+        }
+        releaseWakeLock();
+        releaseWifiLock();
+    }
+
+    private Notification buildNotification(String url, String folderName) {
+        // Tap notification -> open MainActivity
+        Intent openActivityIntent = new Intent(this, MainActivity.class);
+        openActivityIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentPendingIntent = PendingIntent.getActivity(
+                this, 0, openActivityIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        // Action: Stop server
+        Intent stopIntent = new Intent(this, ServerService.class);
+        stopIntent.setAction(ACTION_STOP);
+        PendingIntent stopPendingIntent = PendingIntent.getService(
+                this, 1, stopIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        // Action: Open Browser -> VIEW url directly
+        PendingIntent openBrowserPendingIntent = null;
+        if (url != null && !url.isEmpty()) {
+            try {
+                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                // Use activity PendingIntent so it opens browser outside app
+                browserIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                openBrowserPendingIntent = PendingIntent.getActivity(
+                        this, 2, browserIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0)
+                );
+            } catch (Exception ignored) {}
+        }
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setContentTitle("Server is running")
+                .setContentText(url)
+                .setSubText(folderName)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentIntent(contentPendingIntent)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setOnlyAlertOnce(true)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setShowWhen(false)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+
+        // Add actions - order: Open Browser, Stop
+        if (openBrowserPendingIntent != null) {
+            builder.addAction(new NotificationCompat.Action(
+                    android.R.drawable.ic_menu_view, "Open Browser", openBrowserPendingIntent));
+        }
+        builder.addAction(new NotificationCompat.Action(
+                android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent));
+
+        // BigText style for full URL visibility (folder already shown in SubText header)
+        builder.setStyle(new NotificationCompat.BigTextStyle()
+                .bigText(url));
+
+        return builder.build();
+    }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "PouchStream Background Server",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Shows active web streaming and file server status. Keeps server alive in background.");
+            channel.setShowBadge(false);
+            channel.enableLights(false);
+            channel.enableVibration(false);
+            channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) {
+                nm.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        stopServer();
+        releaseWakeLock();
+        releaseWifiLock();
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+}
