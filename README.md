@@ -2,8 +2,6 @@
 
 Lightweight local file server for Android — stream and manage files over Wi-Fi.
 
-By **ASDK** — `theonlyasdk`
-
 ## Features
 - Foreground service with persistent notification (Stop / Open Browser)
 - Wi-Fi & wake lock, autostart on boot, battery optimization prompt
@@ -27,11 +25,7 @@ adb install -r -t app/build/outputs/apk/release/app-release.apk
 ```
 
 ## Stack
-Android 23-37, NanoHTTPD, DocumentFile, Material, WebView assets (`index.html` + `js/*`)
+Android SDK, NanoHTTPD, DocumentFile, Material, WebView assets (HTML/CSS/JS)
 
-## Project
-```
-app/src/main/java/com/asdk/media/pouchstream/  # ServerService, PouchServer, SettingsActivity, MainActivity
-app/src/main/assets/web/                       # portal (app.js, player.js, ui.js)
-dev_server.py / dev_shared_folder/             # desktop dev server
-```
+# License
+Licensed under the MIT license.
