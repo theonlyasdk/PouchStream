@@ -40,6 +40,8 @@ dependencies {
     implementation(libs.material)
     implementation(libs.nanohttpd)
     implementation(libs.documentfile)
+    implementation(libs.zxing.core)
+    implementation(libs.transition)
     testImplementation(libs.junit)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.ext.junit)

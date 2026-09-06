@@ -1394,6 +1394,17 @@ export const Player = {
         this.loadSubtitlesForVideo(path, name).catch(err => console.warn('Could not auto-load subtitles:', err));
         this.setupAudioTracks();
 
+        const audioEl = document.getElementById('audioPlayerElement');
+        if (audioEl && !audioEl.paused) {
+            audioEl.pause();
+        }
+
+        const pdfView = document.getElementById('contentPdfView');
+        if (pdfView) {
+            pdfView.classList.add('d-none');
+            pdfView.classList.remove('d-flex');
+        }
+
         const imageView = document.getElementById('contentImageView');
         if (imageView) {
             imageView.classList.add('d-none');

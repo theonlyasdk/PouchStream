@@ -157,6 +157,17 @@ class PouchRequestHandler(BaseHTTPRequestHandler):
                 "isReady": True,
                 "port": self.server.server_port
             }
+            try:
+                import shutil
+                total, used, free = shutil.disk_usage(self.server.shared_dir)
+                data["storage"] = {
+                    "totalBytes": total,
+                    "freeBytes": free,
+                    "usedBytes": used,
+                    "path": self.server.shared_dir
+                }
+            except Exception:
+                pass
             self.send_json(data)
 
         elif path == "/api/files":
@@ -246,8 +257,88 @@ class PouchRequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/stream":
             self.handle_stream(query)
 
+        elif path == "/api/zip":
+            self.handle_zip(query)
+
         else:
             self.send_json_error(404, "Endpoint not found")
+
+    def handle_zip(self, query):
+        import zipfile
+        import tempfile
+
+        paths_param = query.get("paths", [""])[0]
+        rel_path = query.get("path", [""])[0]
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+            tmp_path = tmp.name
+
+        try:
+            with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                if paths_param:
+                    items = [p.strip() for p in paths_param.split(",") if p.strip()]
+                    zip_filename = "selected_files.zip"
+                    for item in items:
+                        real_item = self.get_real_path(item)
+                        if not real_item or not os.path.exists(real_item):
+                            continue
+                        if os.path.isdir(real_item):
+                            base_folder = os.path.basename(real_item)
+                            for root, dirs, files in os.walk(real_item):
+                                for d in dirs:
+                                    dir_full = os.path.join(root, d)
+                                    arcname = (os.path.join(base_folder, os.path.relpath(dir_full, real_item)).replace("\\", "/") + "/").strip("/") + "/"
+                                    zinfo = zipfile.ZipInfo(arcname)
+                                    zf.writestr(zinfo, "")
+                                for file in files:
+                                    full_file = os.path.join(root, file)
+                                    arcname = os.path.join(base_folder, os.path.relpath(full_file, real_item)).replace("\\", "/")
+                                    zf.write(full_file, arcname)
+                        else:
+                            zf.write(real_item, os.path.basename(real_item))
+                else:
+                    real_target = self.get_real_path(rel_path)
+                    if not real_target or not os.path.exists(real_target):
+                        self.send_json_error(404, "File or directory not found")
+                        return
+                    if os.path.isfile(real_target):
+                        zip_filename = f"{os.path.basename(real_target)}.zip"
+                        zf.write(real_target, os.path.basename(real_target))
+                    else:
+                        folder_name = os.path.basename(real_target) or "archive"
+                        zip_filename = f"{folder_name}.zip"
+                        for root, dirs, files in os.walk(real_target):
+                            for d in dirs:
+                                dir_full = os.path.join(root, d)
+                                arcname = os.path.relpath(dir_full, real_target).replace("\\", "/").strip("/") + "/"
+                                zinfo = zipfile.ZipInfo(arcname)
+                                zf.writestr(zinfo, "")
+                            for file in files:
+                                full_file = os.path.join(root, file)
+                                arcname = os.path.relpath(full_file, real_target).replace("\\", "/")
+                                zf.write(full_file, arcname)
+
+            file_size = os.path.getsize(tmp_path)
+            safe_zip_filename = os.path.basename(zip_filename).replace('"', '_')
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(file_size))
+            self.send_header("Content-Disposition", f'attachment; filename="{safe_zip_filename}"')
+            self.send_cors_headers()
+            self.end_headers()
+
+            with open(tmp_path, "rb") as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
     def handle_stream(self, query):
         rel_path = query.get("path", [""])[0]
@@ -273,10 +364,27 @@ class PouchRequestHandler(BaseHTTPRequestHandler):
 
             if "-" in range_val:
                 p1, p2 = range_val.split("-", 1)
-                if p1:
-                    start = int(p1)
-                if p2:
-                    end = int(p2)
+                p1 = p1.strip()
+                p2 = p2.strip()
+                if not p1:
+                    # Suffix range: bytes=-500 (last 500 bytes per RFC 7233)
+                    if p2:
+                        try:
+                            suffix_len = int(p2)
+                            start = max(0, file_size - suffix_len)
+                            end = file_size - 1
+                        except ValueError:
+                            pass
+                else:
+                    try:
+                        start = int(p1)
+                    except ValueError:
+                        pass
+                    if p2:
+                        try:
+                            end = int(p2)
+                        except ValueError:
+                            pass
 
             if start > end or start >= file_size:
                 self.send_response(416)
@@ -396,18 +504,25 @@ class PouchRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/upload":
             rel_path = fields.get("path", "")
-            target_dir = self.get_real_path(rel_path) or self.server.shared_dir
-            os.makedirs(target_dir, exist_ok=True)
+            base_target_dir = self.get_real_path(rel_path) or self.server.shared_dir
+            os.makedirs(base_target_dir, exist_ok=True)
 
             uploaded_count = 0
             for item in files:
-                filename = item.get("filename")
+                raw_filename = item.get("filename")
                 data = item.get("data")
-                if filename and data is not None:
-                    out_path = os.path.join(target_dir, os.path.basename(filename))
-                    with open(out_path, "wb") as f:
-                        f.write(data)
-                    uploaded_count += 1
+                if raw_filename and data is not None:
+                    clean_filename = raw_filename.replace("\\", "/").strip("/")
+                    parts = [p for p in clean_filename.split("/") if p and p != ".."]
+                    if parts:
+                        subdirs = parts[:-1]
+                        leaf_name = parts[-1]
+                        file_dir = os.path.join(base_target_dir, *subdirs) if subdirs else base_target_dir
+                        os.makedirs(file_dir, exist_ok=True)
+                        out_path = os.path.join(file_dir, leaf_name)
+                        with open(out_path, "wb") as f:
+                            f.write(data)
+                        uploaded_count += 1
             self.send_json({"success": True, "uploaded": uploaded_count})
         else:
             self.send_json_error(404, "Not Found")

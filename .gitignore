@@ -14,3 +14,5 @@
 .cxx
 local.properties
 /dev_shared_folder
+__pycache__/
+*.pyc

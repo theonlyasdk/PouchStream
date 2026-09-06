@@ -1,3 +1,177 @@
 <resources>
     <string name="app_name">PouchStream</string>
+
+    <!-- Common -->
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="copy">Copy</string>
+    <string name="later">Later</string>
+    <string name="allow">Allow</string>
+    <string name="save">Save</string>
+    <string name="disable">Disable</string>
+    <string name="clear">Clear</string>
+    <string name="reset">Reset</string>
+    <string name="choose_folder">Choose Folder</string>
+
+    <!-- Main Activity -->
+    <string name="server_status">Server Status</string>
+    <string name="server_stopped">Stopped</string>
+    <string name="server_running">Running</string>
+    <string name="server_starting">Starting</string>
+    <string name="server_stopping">Stopping</string>
+    <string name="web_access_url">Web Access URL</string>
+    <string name="url_placeholder">http://--:8080</string>
+    <string name="copy_url">Copy URL</string>
+    <string name="open_browser">Open Browser</string>
+    <string name="shared_folder">Shared Folder</string>
+    <string name="no_folder_selected">No folder selected</string>
+    <string name="select_folder">Select Folder</string>
+    <string name="start_server">Start Server</string>
+    <string name="stop_server">Stop Server</string>
+    <string name="storage_free_of">%1$s free of %2$s</string>
+    <string name="clip_label_url">PouchStream URL</string>
+    <string name="clip_label_ip">IP Address</string>
+    <string name="clip_label_logs">Server Logs</string>
+    <string name="toast_copied_url">Copied URL to clipboard</string>
+    <string name="toast_copied_ip">Copied IP to clipboard</string>
+    <string name="toast_folder_selected">Folder selected: %1$s</string>
+    <string name="toast_failed_persist_permission">Failed to persist folder permission: %1$s</string>
+    <string name="toast_select_folder_first">Please select a folder first!</string>
+    <string name="toast_notification_permission_recommended">Notification permission recommended for background server</string>
+    <string name="toast_logs_copied">Logs copied to clipboard</string>
+    <string name="toast_failed_generate_qr">Failed to generate QR code</string>
+    <string name="toast_server_error">Server error: %1$s</string>
+    <string name="toast_port_set_to">Port set to %1$d</string>
+    <string name="toast_port_busy_switched">Port busy, switched to %1$d</string>
+    <string name="toast_autostart_enabled">Autostart enabled</string>
+    <string name="toast_autostart_disabled">Autostart disabled</string>
+    <string name="toast_readonly_enabled">Read-only enabled — writes blocked</string>
+    <string name="toast_readonly_disabled">Read-only disabled</string>
+    <string name="toast_keep_awake_enabled">Keep awake enabled</string>
+    <string name="toast_keep_awake_disabled">Keep awake disabled</string>
+    <string name="toast_password_required">Username and password required</string>
+    <string name="toast_password_enabled">Password protection enabled</string>
+    <string name="toast_password_disabled">Password protection disabled</string>
+    <string name="toast_invalid_port">Invalid port number</string>
+    <string name="toast_port_range_error">Port must be between 1024 and 65535</string>
+    <string name="toast_cleared">Cleared %1$s and %2$d logs</string>
+    <string name="toast_restarting_server">Restarting server...</string>
+    <string name="toast_folder_reset">Folder selection reset</string>
+    <string name="toast_settings_restored">Settings restored to default</string>
+    <string name="toast_not_required">Not required on this Android version</string>
+    <string name="toast_already_unrestricted">Already unrestricted</string>
+    <string name="toast_unable_open_battery">Unable to open battery settings: %1$s</string>
+
+    <!-- Dialogs - Main -->
+    <string name="dialog_keep_running_title">Keep server running in background?</string>
+    <string name="dialog_keep_running_message">To prevent Android from killing PouchStream in background, please allow it to run without battery restrictions.\n\nTap \"Allow\" to open settings and choose \"Don\'t optimize\".</string>
+    <string name="dialog_server_not_running_title">Server Not Running</string>
+    <string name="dialog_server_not_running_no_folder">No folder is selected and server is stopped. Please choose a folder to start the server.</string>
+    <string name="dialog_server_not_running_stopped">The server is currently stopped. Would you like to start the server now to share the QR code?</string>
+    <string name="dialog_share_qr_title">Share Server via QR Code</string>
+    <string name="dialog_copy_link">Copy Link</string>
+    <string name="about_title">About PouchStream</string>
+    <string name="about_message">PouchStream by theonlyasdk\n\nA lightweight local server for media streaming and remote file management.</string>
+
+    <!-- QR Dialog -->
+    <string name="qr_url_placeholder">http://192.168.1.100:8080</string>
+    <string name="qr_content_description">Server URL QR Code</string>
+    <string name="qr_scan_hint">Scan with a phone, tablet, or laptop camera on the same Wi-Fi network to connect.</string>
+
+    <!-- Logs -->
+    <string name="server_logs">Server Logs</string>
+    <string name="no_logs_recorded">No logs recorded yet.</string>
+
+    <!-- Menus -->
+    <string name="menu_share_qr">Share QR Code</string>
+    <string name="menu_server_logs">Server Logs</string>
+    <string name="menu_settings">Settings</string>
+    <string name="menu_about">About…</string>
+    <string name="menu_copy_all">Copy All</string>
+    <string name="menu_clear">Clear</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_appearance">APPEARANCE</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_system_default">System default</string>
+    <string name="settings_section_server">SERVER</string>
+    <string name="settings_server_port">Server Port</string>
+    <string name="settings_device_ip">Device IP Address</string>
+    <string name="settings_section_storage">STORAGE</string>
+    <string name="settings_reset_shared_folder">Reset Shared Folder</string>
+    <string name="settings_reset_shared_folder_summary">Unlink currently selected folder</string>
+    <string name="settings_section_system">SYSTEM</string>
+    <string name="settings_autostart">Autostart on boot</string>
+    <string name="settings_autostart_summary">Restarts server after reboot</string>
+    <string name="settings_autostart_enabled">Enabled — restarts after reboot</string>
+    <string name="settings_autostart_disabled">Disabled</string>
+    <string name="settings_readonly">Read-only mode</string>
+    <string name="settings_readonly_summary">Blocks upload, delete and edit</string>
+    <string name="settings_readonly_enabled">Enabled — uploads &amp; edits blocked</string>
+    <string name="settings_readonly_disabled">Disabled</string>
+    <string name="settings_keep_awake">Keep screen &amp; Wi-Fi awake</string>
+    <string name="settings_keep_awake_summary">High-perf Wi-Fi + screen on while running</string>
+    <string name="settings_keep_awake_enabled">Enabled — Wi-Fi high-perf + screen on</string>
+    <string name="settings_keep_awake_disabled">Disabled</string>
+    <string name="settings_connection_security">Connection security</string>
+    <string name="settings_no_password">No password</string>
+    <string name="settings_auth_disabled_summary">Disabled — anyone on Wi-Fi can access</string>
+    <string name="settings_auth_enabled_summary">Enabled — user: %1$s</string>
+    <string name="settings_auth_enabled_user_not_set">(not set)</string>
+    <string name="settings_keep_running">Keep running in background</string>
+    <string name="settings_battery_optimization">Battery optimization</string>
+    <string name="settings_battery_unrestricted">Unrestricted — server stays alive in background</string>
+    <string name="settings_battery_optimized">Optimized — tap to allow unrestricted</string>
+    <string name="settings_battery_not_required">Not required on this Android version</string>
+    <string name="settings_server_logs">Server Logs</string>
+    <string name="settings_server_logs_summary">View recent activity and errors</string>
+    <string name="settings_clear_cache">Clear cache &amp; logs</string>
+    <string name="settings_clear_cache_summary">Free temp files and diagnostic logs</string>
+    <string name="settings_reset_defaults">Reset to Defaults</string>
+    <string name="settings_reset_defaults_summary">Restore port and preferences to default</string>
+
+    <!-- Settings Dialogs -->
+    <string name="dialog_choose_theme">Choose theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="dialog_connection_security">Connection security</string>
+    <string name="switch_require_auth">Require username &amp; password</string>
+    <string name="hint_username">Username</string>
+    <string name="hint_password">Password</string>
+    <string name="dialog_clear_cache_title">Clear cache &amp; logs</string>
+    <string name="dialog_clear_cache_message">Clear %1$s of temp files and %2$d log entries?\n\nThis frees space and clears diagnostic logs.</string>
+    <string name="dialog_select_port">Select Server Port</string>
+    <string name="dialog_custom_port">Custom Server Port</string>
+    <string name="dialog_custom_port_message">Enter a port number between 1024 and 65535:</string>
+    <string name="dialog_device_ip_title">Device IP Address</string>
+    <string name="dialog_device_ip_message">Local IPv4 Address:\n%1$s\n\nClients on the same local Wi-Fi or Hotspot can access PouchStream through this address.</string>
+    <string name="dialog_copy_ip">Copy IP</string>
+    <string name="dialog_reset_folder_title">Reset Shared Folder</string>
+    <string name="dialog_reset_folder_message">Unlink the currently selected directory? You will be prompted to pick a folder again on the main screen.</string>
+    <string name="dialog_unlink">Unlink</string>
+    <string name="dialog_reset_defaults_title">Reset to Defaults</string>
+    <string name="dialog_reset_defaults_message">Reset all settings to default values (Port 8080, theme system, autostart on, no password)?</string>
+    <string name="dialog_restart_server_title">Restart Server?</string>
+    <string name="dialog_restart_server_message">%1$s changed while the server is running. Would you like to restart it now to apply changes?</string>
+    <string name="dialog_restart_now">Restart Now</string>
+
+    <!-- Port options -->
+    <string name="port_default">8080 (Default)</string>
+    <string name="port_custom">Custom port…</string>
+
+    <!-- Service / Notification -->
+    <string name="notification_channel_name">PouchStream Background Server</string>
+    <string name="notification_channel_desc">Shows active web streaming and file server status. Keeps server alive in background.</string>
+    <string name="notification_title_running">Server is running</string>
+    <string name="notification_action_open_browser">Open Browser</string>
+    <string name="notification_action_stop">Stop</string>
+
+    <!-- Misc formats -->
+    <string name="format_bytes_b">%1$d B</string>
+    <string name="format_bytes_kb">%.1f KB</string>
+    <string name="format_bytes_mb">%.1f MB</string>
+    <string name="format_storage_bytes">%.1f %1$s</string>
+    <string name="bytes_zero">0 B</string>
 </resources>

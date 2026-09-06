@@ -31,6 +31,9 @@ public class BoundedInputStream extends InputStream {
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
+        if (len == 0) {
+            return 0;
+        }
         if (remaining <= 0) {
             return -1;
         }
@@ -46,6 +49,19 @@ public class BoundedInputStream extends InputStream {
     @Override
     public int available() throws IOException {
         return (int) Math.min(in.available(), remaining);
+    }
+
+    @Override
+    public long skip(long n) throws IOException {
+        if (remaining <= 0 || n <= 0) {
+            return 0;
+        }
+        long toSkip = Math.min(n, remaining);
+        long skipped = in.skip(toSkip);
+        if (skipped > 0) {
+            remaining -= skipped;
+        }
+        return skipped;
     }
 
     @Override

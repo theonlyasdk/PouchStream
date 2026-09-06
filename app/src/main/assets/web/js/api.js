@@ -97,7 +97,9 @@ export const Api = {
             const formData = new FormData();
             formData.append('path', path);
             for (let i = 0; i < fileList.length; i++) {
-                formData.append(`file_${i}`, fileList[i], fileList[i].name);
+                const file = fileList[i];
+                const relPath = file.relativePath || file.webkitRelativePath || file.name;
+                formData.append(`file_${i}`, file, relPath);
             }
 
             const xhr = new XMLHttpRequest();

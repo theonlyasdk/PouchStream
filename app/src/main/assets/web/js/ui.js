@@ -86,6 +86,20 @@ export const UI = {
         return mime.startsWith('video/') || ['mp4', 'mkv', 'webm', 'mov', 'avi', 'm4v'].includes(ext);
     },
 
+    isAudio(item) {
+        if (!item || item.isDirectory) return false;
+        const ext = (item.extension || '').toLowerCase();
+        const mime = (item.mimeType || '').toLowerCase();
+        return mime.startsWith('audio/') || ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a', 'opus', 'wma'].includes(ext);
+    },
+
+    isPdf(item) {
+        if (!item || item.isDirectory) return false;
+        const ext = (item.extension || '').toLowerCase();
+        const mime = (item.mimeType || '').toLowerCase();
+        return mime === 'application/pdf' || ext === 'pdf';
+    },
+
     isImage(item) {
         if (item.isDirectory) return false;
         const ext = (item.extension || '').toLowerCase();
@@ -183,7 +197,7 @@ export const UI = {
         });
     },
 
-    renderTable(onNavigate, onPlay, onEdit, onPreviewImage, onDelete, onRename, onContextMenu) {
+    renderTable(onNavigate, onPlay, onEdit, onPreviewImage, onDelete, onRename, onContextMenu, onPlayAudio, onPreviewPdf) {
         const tbody = document.getElementById('fileTableBody');
         if (!tbody) return;
 
@@ -191,7 +205,7 @@ export const UI = {
         // update header select-all checkbox
         const chkAll = document.getElementById('chkSelectAll');
         if (chkAll) {
-            const allPaths = State.getFilteredItems().filter(i => !i.isDirectory || true).map(i => i.path);
+            const allPaths = State.getFilteredItems().map(i => i.path);
             const selCount = allPaths.filter(p => State.selectedPaths.has(p)).length;
             chkAll.checked = allPaths.length > 0 && selCount === allPaths.length;
             chkAll.indeterminate = selCount > 0 && selCount < allPaths.length;
@@ -256,6 +270,8 @@ export const UI = {
             const iconName = this.getSemanticIcon(item);
             const iconColor = this.getIconColor(item);
             const isVideo = this.isVideo(item);
+            const isAudio = this.isAudio(item);
+            const isPdf = this.isPdf(item);
             const isImage = this.isImage(item);
             const isEditable = this.isEditable(item);
             const sizeStr = item.isDirectory ? '—' : this.formatBytes(item.size);
@@ -292,6 +308,16 @@ export const UI = {
                                 <ion-icon name="play"></ion-icon>
                             </button>
                         ` : ''}
+                        ${isAudio ? `
+                            <button type="button" class="table-action-btn table-action-btn-primary" title="Play Audio" data-action="play-audio">
+                                <ion-icon name="musical-notes"></ion-icon>
+                            </button>
+                        ` : ''}
+                        ${isPdf ? `
+                            <button type="button" class="table-action-btn table-action-btn-primary" title="Preview PDF" data-action="preview-pdf">
+                                <ion-icon name="document-text"></ion-icon>
+                            </button>
+                        ` : ''}
                         ${isImage ? `
                             <button type="button" class="table-action-btn table-action-btn-primary" title="Preview Picture" data-action="preview-image">
                                 <ion-icon name="eye"></ion-icon>
@@ -302,11 +328,15 @@ export const UI = {
                                 <ion-icon name="create"></ion-icon>
                             </button>
                         ` : ''}
-                        ${!item.isDirectory ? `
+                        ${item.isDirectory ? `
+                            <a href="/api/zip?path=${encodeURIComponent(item.path)}" class="table-action-btn" title="Download Folder as ZIP">
+                                <ion-icon name="archive"></ion-icon>
+                            </a>
+                        ` : `
                             <a href="/api/stream?path=${encodeURIComponent(item.path)}&download=true" class="table-action-btn" title="Download File">
                                 <ion-icon name="download"></ion-icon>
                             </a>
-                        ` : ''}
+                        `}
                         <button type="button" class="table-action-btn" title="Rename" data-action="rename">
                             <ion-icon name="pencil"></ion-icon>
                         </button>
@@ -344,6 +374,10 @@ export const UI = {
                     onNavigate(item.path);
                 } else if (isVideo) {
                     onPlay(item.path, item.name);
+                } else if (isAudio) {
+                    if (onPlayAudio) onPlayAudio(item.path, item.name);
+                } else if (isPdf) {
+                    if (onPreviewPdf) onPreviewPdf(item.path, item.name);
                 } else if (isImage) {
                     if (onPreviewImage) onPreviewImage(item.path, item.name);
                 } else if (isEditable) {
@@ -365,6 +399,12 @@ export const UI = {
             // Action button delegates
             const btnStream = tr.querySelector('[data-action="stream"]');
             if (btnStream) btnStream.addEventListener('click', () => onPlay(item.path, item.name));
+
+            const btnPlayAudio = tr.querySelector('[data-action="play-audio"]');
+            if (btnPlayAudio && onPlayAudio) btnPlayAudio.addEventListener('click', () => onPlayAudio(item.path, item.name));
+
+            const btnPreviewPdf = tr.querySelector('[data-action="preview-pdf"]');
+            if (btnPreviewPdf && onPreviewPdf) btnPreviewPdf.addEventListener('click', () => onPreviewPdf(item.path, item.name));
 
             const btnPreviewImage = tr.querySelector('[data-action="preview-image"]');
             if (btnPreviewImage && onPreviewImage) btnPreviewImage.addEventListener('click', () => onPreviewImage(item.path, item.name));
@@ -440,7 +480,7 @@ export const UI = {
                     setTimeout(() => starBtn.classList.remove('fav-pop'), 400);
                     UI.showToast(nowFav ? 'Starred' : 'Unstarred', item.name, nowFav ? 'success' : 'secondary');
                     if (State.activeCategory === 'favorites' && !nowFav) {
-                        setTimeout(() => UI.renderTable(onNavigate, onPlay, onEdit, onPreviewImage, onDelete, onRename, onContextMenu), 120);
+                        setTimeout(() => UI.renderTable(onNavigate, onPlay, onEdit, onPreviewImage, onDelete, onRename, onContextMenu, onPlayAudio, onPreviewPdf), 120);
                     }
                 });
             }

@@ -10,6 +10,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
     <!-- Bootstrap 5 CSS -->
     <link rel="stylesheet" href="/css/bootstrap.min.css">
     <!-- Portal Behavior & OLED Utility Styles -->
@@ -35,7 +38,11 @@
                 <button class="portal-header-btn" id="btnToggleSidebar" type="button" title="Toggle Sidebar Navigation">
                     <ion-icon name="menu"></ion-icon>
                 </button>
-                <div class="d-flex align-items-center ps-2 pe-3">
+                <div class="d-flex align-items-center ps-2 pe-3 gap-2">
+                    <svg class="portal-brand-icon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 512 512" fill="currentColor" aria-label="PouchStream Logo">
+                        <path d="M0 0h512v512H0z" fill="none" />
+                        <path fill="currentColor" d="m132.992 48.756l-9.984 14.976l77.287 51.524c4.32-4.192 9.542-8.012 15.703-11.162zm246.016 0l-83.006 55.338c6.16 3.15 11.383 6.97 15.703 11.162l77.287-51.524zM256 113.244c-22 0-35.334 7.06-43.637 15.363c-4.703 4.704-7.58 9.97-9.316 14.637h105.906c-1.736-4.668-4.613-9.933-9.316-14.637c-8.303-8.303-21.637-15.363-43.637-15.363m-191.936 48c-5.044 0-11.106 2.784-15.697 7.37c-4.59 4.584-7.367 10.63-7.367 15.63v279h430V184.2c.026-5.457-2.764-11.393-7.227-15.87s-10.346-7.086-14.826-7.086zm30.295 23h257.745c10.374 0 20.79 6.818 26.776 16H112c-16 0-32 16-32 32v160c25.924-162.54 145.877-185.697 299.016-191.795c3.106 4.836 4.984 10.315 4.984 15.794v192c0 16-16 32-33.88 32H95.35c-15.35 0-31.35-16-31.35-32v-192c0-16 16-32 30.36-32zm328.663 7c13.7 0 25 11.3 25 25s-11.3 25-25 25s-25-11.3-25-25s11.3-25 25-25m-23.023 144h48v18h-48zm0 32h48v18h-48zm0 32h48v18h-48z" />
+                    </svg>
                     <span class="navbar-brand mb-0 fs-5 fw-bold text-body text-truncate" style="letter-spacing: -0.02em;">
                         PouchStream
                     </span>
@@ -161,7 +168,12 @@
                             </div>
                         </div>
 
-                        <button type="button" class="portal-header-btn portal-header-btn-primary border-start" data-bs-toggle="modal" data-bs-target="#uploadModal" title="Upload files to active directory">
+                        <button type="button" class="portal-header-btn border-start" id="btnDownloadFolderZip" title="Download current folder as ZIP">
+                            <ion-icon name="archive-outline"></ion-icon>
+                            <span>Download ZIP</span>
+                        </button>
+
+                        <button type="button" class="portal-header-btn portal-header-btn-primary border-start" data-bs-toggle="modal" data-bs-target="#uploadModal" title="Upload files or folders to active directory">
                             <ion-icon name="cloud-upload"></ion-icon>
                             <span>Upload</span>
                         </button>
@@ -177,6 +189,7 @@
                         </button>
                     </div>
                     <div class="d-flex align-items-stretch">
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkZip" title="Download selected as ZIP"><ion-icon name="archive-outline"></ion-icon><span>Download ZIP</span></button>
                         <button type="button" class="portal-header-btn border-start" id="btnBulkDownload" title="Download selected"><ion-icon name="download"></ion-icon><span>Download</span></button>
                         <button type="button" class="portal-header-btn border-start" id="btnBulkMove" title="Move to folder"><ion-icon name="folder-open"></ion-icon><span>Move</span></button>
                         <button type="button" class="portal-header-btn border-start" id="btnBulkDelete" title="Delete selected"><ion-icon name="trash"></ion-icon><span>Delete</span></button>
@@ -569,6 +582,69 @@
                     </div>
                 </div>
 
+                <!-- Full In-Content PDF Preview View (Full screen in content area only) -->
+                <div id="contentPdfView" class="w-100 h-100 flex-column bg-black d-none position-relative">
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnClosePdf" title="Back to file list (Esc)">
+                                <ion-icon name="arrow-back"></ion-icon>
+                                <span>Back</span>
+                            </button>
+                            <a id="btnPdfDownload" href="#" class="portal-header-btn portal-header-btn-primary border-start" title="Download PDF File">
+                                <ion-icon name="download"></ion-icon>
+                                <span>Download</span>
+                            </a>
+                            <a id="btnPdfNewTab" href="#" target="_blank" class="portal-header-btn border-start" title="Open in New Browser Tab">
+                                <ion-icon name="open-outline"></ion-icon>
+                                <span>Open in Tab</span>
+                            </a>
+                        </div>
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto gap-3">
+                            <span class="badge bg-danger border border-danger-subtle text-white font-monospace small">PDF</span>
+                            <span class="fw-bold text-truncate text-body fs-6" id="pdfTitle" title="Active Document">Document Preview</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 w-100 h-100 position-relative bg-dark" style="overflow: hidden;">
+                        <iframe id="pdfFrame" class="w-100 h-100 border-0" title="PDF Document Viewer"></iframe>
+                    </div>
+                </div>
+
+                <!-- Audio Visualizer - Compact Flush View (above bottom bar) -->
+                <div id="contentAudioVisualizer" class="w-100 flex-column bg-black position-relative d-none">
+                    <div class="portal-toolbar d-flex align-items-stretch justify-content-between flex-shrink-0" style="background-color: #070707; border-color: #495057 !important;">
+                        <div class="d-flex align-items-stretch">
+                            <button type="button" class="portal-header-btn" id="btnCloseAudioVisualizer" title="Back to file list (Esc)">
+                                <ion-icon name="arrow-back"></ion-icon>
+                                <span>Back</span>
+                            </button>
+                            <a id="btnAudioVisualizerDownload" href="#" class="portal-header-btn portal-header-btn-primary border-start" title="Download Audio File">
+                                <ion-icon name="download"></ion-icon>
+                                <span>Download</span>
+                            </a>
+                        </div>
+                        <div class="d-flex align-items-center overflow-hidden px-3 ms-auto gap-3">
+                            <span class="badge border text-white small" style="background: #0a0a0a; border-color: #495057 !important; border-radius: 0 !important;">VISUALIZER</span>
+                            <span class="fw-bold text-truncate text-body fs-6" id="audioVisualizerTitle" title="Audio Track">Audio Visualizer</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 d-flex flex-column overflow-hidden" style="background: #000000; min-height: 0;">
+                        <!-- Track Header - Flush minimalistic -->
+                        <div class="d-flex align-items-center gap-2 p-2" style="background: #070707; border-bottom: 1px solid #495057; min-height: 0;">
+                            <div class="audio-cover-large d-flex align-items-center justify-content-center flex-shrink-0" style="width: 48px; height: 48px; background: #1a1a1a; border: 1px solid #495057; border-radius: 0;">
+                                <ion-icon name="musical-notes" style="font-size: 1.25rem; color: #e5e7eb;"></ion-icon>
+                            </div>
+                            <div class="overflow-hidden" style="min-width: 0;">
+                                <div class="fw-bold text-body small text-truncate" id="audioVisualizerTrackTitle">Track Title</div>
+                                <div class="text-secondary small text-truncate" id="audioVisualizerTrackSub" style="font-size: 0.7rem;">Audio Visualizer</div>
+                            </div>
+                        </div>
+                        <!-- Waveform - single seekbar is bottom bar, flush -->
+                        <div class="flex-grow-1 w-100 position-relative" style="background: #000000; min-height: 0; overflow: hidden;">
+                            <canvas id="audioVisualizerCanvas" class="audio-visualizer-canvas w-100 h-100 position-absolute top-0 start-0" style="width: 100%; height: 100%; display: block; background: #000000;"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Full In-Content Settings View (Clean, Flush, Minimalist) -->
                 <div id="contentSettingsView" class="w-100 h-100 flex-column bg-black d-none">
                     <!-- Settings Toolbar -->
@@ -720,11 +796,92 @@
                                         <span>System Architecture</span>
                                         <span class="text-body font-monospace small" id="settingsHostArch">aarch64</span>
                                     </div>
+                                    <div class="settings-row-item">
+                                        <span>Storage Capacity</span>
+                                        <span class="text-body fw-bold" id="settingsStorageCapacity">--</span>
+                                    </div>
                                 </div>
                             </div>
 
                         </div>
                     </div>
+                </div>
+
+                <!-- Bottom-Docked Audio Player Bar - Slide In -->
+                <div id="bottomAudioPlayer" class="portal-audio-bar d-none flex-column flex-shrink-0" style="background-color: #070707; border-top: 1px solid #495057;">
+                    <!-- Audio Progress / Scrubber Bar -->
+                    <div class="audio-progress-container position-relative" id="audioProgressContainer" title="Seek Audio">
+                        <div class="audio-progress-buffered" id="audioProgressBuffered"></div>
+                        <div class="audio-progress-played" id="audioProgressPlayed"></div>
+                        <div class="audio-progress-thumb" id="audioProgressThumb"></div>
+                    </div>
+                    <div class="d-flex align-items-stretch justify-content-between audio-bar-inner" style="height: 48px; min-width: 0;">
+                        <!-- Left: Track info & cover icon - Click to open full visualizer -->
+                        <div class="d-flex align-items-center gap-2 overflow-hidden flex-shrink-1" style="min-width: 0; flex: 1 1 0; padding-left: 8px;">
+                            <div id="audioIconBox" class="audio-icon-box d-flex align-items-center justify-content-center flex-shrink-0" style="width: 32px; height: 32px; background: #1a1a1a; border: 1px solid #495057; border-radius: 0;" title="Open visualizer">
+                                <ion-icon name="musical-notes" style="font-size: 1.15rem; color: #e5e7eb;"></ion-icon>
+                            </div>
+                            <div class="overflow-hidden text-truncate flex-grow-1" id="audioTrackInfoClickable" style="cursor:pointer; min-width: 0;" title="Open visualizer">
+                                <div class="fw-bold text-body small text-truncate" id="audioTrackTitle">Track Title</div>
+                                <div class="text-secondary small text-truncate" id="audioTrackSub" style="font-size: 0.75rem;">Audio File</div>
+                            </div>
+                        </div>
+
+                        <!-- Center: Playback Controls - grouped, flush -->
+                        <div class="d-flex align-items-stretch flex-shrink-0">
+                            <button type="button" class="portal-header-btn px-2 px-md-3" id="btnAudioPrev" title="Previous Track (Shift+Left)">
+                                <ion-icon name="play-skip-back"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn px-2 px-md-3" id="btnAudioRewind" title="Rewind 10s">
+                                <ion-icon name="play-back"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn px-3 px-md-4" id="btnAudioPlayPause" title="Play / Pause">
+                                <ion-icon name="play" id="iconAudioPlayPause" style="font-size: 1.2rem;"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn px-2 px-md-3" id="btnAudioForward" title="Forward 10s">
+                                <ion-icon name="play-forward"></ion-icon>
+                            </button>
+                            <button type="button" class="portal-header-btn px-2 px-md-3" id="btnAudioNext" title="Next Track (Shift+Right)">
+                                <ion-icon name="play-skip-forward"></ion-icon>
+                            </button>
+                            <div class="d-flex align-items-center px-2 px-md-3 small text-secondary tabular-nums flex-shrink-0" id="audioTimeDisplay">
+                                <span id="audioCurrentTime">0:00</span>
+                                <span class="mx-1">/</span>
+                                <span id="audioDuration">0:00</span>
+                            </div>
+                        </div>
+
+                        <!-- Right: Volume Dropup (like video), Loop, Download and Close - flush -->
+                        <div class="d-flex align-items-stretch flex-shrink-0">
+                            <button type="button" class="portal-header-btn px-2 px-md-3" id="btnAudioLoop" title="Toggle Repeat (Off / All / One)">
+                                <ion-icon name="repeat" id="iconAudioLoop"></ion-icon>
+                            </button>
+                            <!-- Vertical Volume Dropup Slider - similar to video player -->
+                            <div class="dropup d-flex align-items-stretch position-relative border-start">
+                                <button class="portal-header-btn dropdown-toggle audio-volume-btn" type="button" id="btnAudioVolumeDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Volume">
+                                    <ion-icon name="volume-high" id="iconAudioVolume"></ion-icon>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-dark shadow border p-2 m-0 dropup-curtain audio-volume-dropdown-menu" aria-labelledby="btnAudioVolumeDropdown" style="background-color: rgba(10, 10, 10, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-color: #495057 !important; height: 150px;">
+                                    <div class="d-flex flex-column align-items-center justify-content-between h-100 py-1">
+                                        <button type="button" class="btn btn-sm btn-link text-secondary p-0 border-0 text-decoration-none" id="btnAudioMute" title="Mute/Unmute">
+                                            <ion-icon name="volume-high" id="iconAudioVolumePopup" style="font-size: 1.1rem;"></ion-icon>
+                                        </button>
+                                        <div class="volume-slider-vertical-container">
+                                            <input type="range" class="custom-nub-slider volume-slider-vertical" id="audioVolumeSlider" min="0" max="1" step="0.01" value="1" title="Volume">
+                                        </div>
+                                        <span class="small text-secondary tabular-nums fw-bold" id="lblAudioVolumePercent" style="font-size: 0.6875rem;">100%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <a id="btnAudioDownload" href="#" class="portal-header-btn px-2 px-md-3 border-start" title="Download Audio File">
+                                <ion-icon name="download"></ion-icon>
+                            </a>
+                            <button type="button" class="portal-header-btn px-2 px-md-3 border-start" id="btnAudioClose" title="Close Audio Player">
+                                <ion-icon name="close"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                    <audio id="audioPlayerElement" preload="metadata" class="d-none"></audio>
                 </div>
 
                 <!-- Fixed Bottom Statusbar -->
@@ -757,9 +914,10 @@
                 <div class="modal-body">
                     <div class="upload-dropzone mb-3" id="uploadDropzone">
                         <input class="d-none" type="file" id="inputUploadFiles" multiple>
+                        <input class="d-none" type="file" id="inputUploadFolder" webkitdirectory directory multiple>
                         <ion-icon name="cloud-upload" style="font-size: 2.25rem;" class="text-secondary mb-2 d-block mx-auto"></ion-icon>
                         <div class="small fw-semibold text-body mb-1">
-                            Drag &amp; drop files here, or <span class="text-primary text-decoration-underline">browse</span>
+                            Drag &amp; drop files or folders here, or <span class="text-primary text-decoration-underline cursor-pointer" id="btnBrowseFiles">browse files</span> / <span class="text-primary text-decoration-underline cursor-pointer" id="btnBrowseFolder">browse folder</span>
                         </div>
                         <div class="small text-secondary" id="uploadFilesSummary">No files selected</div>
                     </div>
@@ -872,6 +1030,12 @@
         <button type="button" class="portal-context-menu-item" data-action="preview-image">
             <ion-icon name="eye"></ion-icon> Preview Picture
         </button>
+        <button type="button" class="portal-context-menu-item" data-action="preview-pdf">
+            <ion-icon name="document-text"></ion-icon> Preview Document
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="play-audio">
+            <ion-icon name="musical-notes"></ion-icon> Play Audio
+        </button>
         <button type="button" class="portal-context-menu-item" data-action="stream">
             <ion-icon name="play"></ion-icon> Stream Video
         </button>
@@ -881,6 +1045,9 @@
         <a href="#" class="portal-context-menu-item" data-action="download">
             <ion-icon name="download"></ion-icon> Download
         </a>
+        <button type="button" class="portal-context-menu-item" data-action="download-zip">
+            <ion-icon name="archive"></ion-icon> Download as ZIP
+        </button>
         <div class="portal-context-menu-divider"></div>
         <button type="button" class="portal-context-menu-item" data-action="rename">
             <ion-icon name="pencil"></ion-icon> Rename
@@ -904,6 +1071,9 @@
         </button>
         <button type="button" class="portal-context-menu-item" data-action="upload">
             <ion-icon name="cloud-upload"></ion-icon> Upload Files
+        </button>
+        <button type="button" class="portal-context-menu-item" data-action="download-current-zip">
+            <ion-icon name="archive"></ion-icon> Download Folder as ZIP
         </button>
         <div class="portal-context-menu-divider"></div>
         <button type="button" class="portal-context-menu-item" data-action="refresh">

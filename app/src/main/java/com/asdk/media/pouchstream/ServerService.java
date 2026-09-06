@@ -9,6 +9,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
+import android.net.ConnectivityManager;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkRequest;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -18,6 +22,7 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 
@@ -53,14 +58,17 @@ public class ServerService extends Service {
     private static String lastError = null;
 
     private PouchServer server;
+    private StorageHelper storage;
+    private ConnectivityManager connectivityManager;
+    private ConnectivityManager.NetworkCallback networkCallback;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
 
     public static void setListener(ServerListener l) {
         listener = l;
-        if (listener != null) {
-            listener.onServerStateChanged(running, serverUrl, lastError);
-        }
+        // Do not immediately callback - let MainActivity onResume handle initial sync with correct animate flag
+        // Previously this caused duplicate onServerStateChanged that cancelled hide animation (button vs notification)
     }
 
     public static boolean isRunning() {
@@ -116,6 +124,7 @@ public class ServerService extends Service {
         super.onTaskRemoved(rootIntent);
     }
 
+    @android.annotation.SuppressLint("WakelockTimeout")
     private void acquireWakeLock() {
         if (wakeLock == null) {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -125,9 +134,8 @@ public class ServerService extends Service {
             }
         }
         if (wakeLock != null && !wakeLock.isHeld()) {
-            // 10 min timeout avoids indefinite wakelock (lint WakelockTimeout) - re-acquired if needed while running
-            wakeLock.acquire(10 * 60 * 1000L);
-            AppLogger.log("ServerService", "WakeLock acquired (10 min)");
+            wakeLock.acquire();
+            AppLogger.log("ServerService", "WakeLock acquired");
         }
     }
 
@@ -203,7 +211,7 @@ public class ServerService extends Service {
             return;
         }
 
-        StorageHelper storage = new StorageHelper(this, folderUri);
+        this.storage = new StorageHelper(this, folderUri);
 
         stopServerSilently();
 
@@ -288,6 +296,8 @@ public class ServerService extends Service {
                 nm.notify(NOTIFICATION_ID, updated);
             }
 
+            registerNetworkCallback();
+
             if (listener != null) {
                 listener.onServerStateChanged(true, serverUrl, null);
             }
@@ -302,10 +312,90 @@ public class ServerService extends Service {
             prefs.edit().putBoolean(KEY_WAS_RUNNING, false).apply();
             releaseWakeLock();
             releaseWifiLock();
+            unregisterNetworkCallback();
             try {
                 androidx.core.app.ServiceCompat.stopForeground(this, androidx.core.app.ServiceCompat.STOP_FOREGROUND_REMOVE);
             } catch (Exception ignored) {}
             stopSelf();
+        }
+    }
+
+    private final Runnable networkCheckRunnable = () -> {
+        if (!running || server == null) return;
+        String newIp = NetworkUtils.getLocalIpAddress(ServerService.this);
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int currentPort = server.getListeningPort() > 0 ? server.getListeningPort() : prefs.getInt(KEY_PORT, 8080);
+        String newUrl = "http://" + newIp + ":" + currentPort;
+        if (!newUrl.equals(serverUrl)) {
+            AppLogger.log("ServerService", "Network change detected: " + serverUrl + " -> " + newUrl);
+            serverUrl = newUrl;
+
+            String folderName = storage != null ? storage.getRootName() : prefs.getString(KEY_FOLDER_NAME, "Selected Folder");
+            Notification updated = buildNotification(serverUrl, folderName);
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.notify(NOTIFICATION_ID, updated);
+            }
+
+            if (listener != null) {
+                listener.onServerStateChanged(true, serverUrl, null);
+            }
+        }
+    };
+
+    private void handleNetworkChange() {
+        mainHandler.removeCallbacks(networkCheckRunnable);
+        mainHandler.postDelayed(networkCheckRunnable, 800);
+    }
+
+    private void registerNetworkCallback() {
+        if (connectivityManager == null) {
+            connectivityManager = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        }
+        if (networkCallback == null && connectivityManager != null) {
+            networkCallback = new ConnectivityManager.NetworkCallback() {
+                @Override
+                public void onAvailable(@NonNull Network network) {
+                    handleNetworkChange();
+                }
+
+                @Override
+                public void onLost(@NonNull Network network) {
+                    handleNetworkChange();
+                }
+
+                @Override
+                public void onLinkPropertiesChanged(@NonNull Network network, @NonNull LinkProperties linkProperties) {
+                    handleNetworkChange();
+                }
+
+                @Override
+                public void onCapabilitiesChanged(@NonNull Network network, @NonNull android.net.NetworkCapabilities networkCapabilities) {
+                    handleNetworkChange();
+                }
+            };
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    connectivityManager.registerDefaultNetworkCallback(networkCallback);
+                } else {
+                    NetworkRequest request = new NetworkRequest.Builder().build();
+                    connectivityManager.registerNetworkCallback(request, networkCallback);
+                }
+                AppLogger.log("ServerService", "ConnectivityManager.NetworkCallback registered");
+            } catch (Exception e) {
+                AppLogger.log("ServerService", "Failed to register network callback: " + e.getMessage());
+            }
+        }
+    }
+
+    private void unregisterNetworkCallback() {
+        mainHandler.removeCallbacks(networkCheckRunnable);
+        if (connectivityManager != null && networkCallback != null) {
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback);
+                AppLogger.log("ServerService", "ConnectivityManager.NetworkCallback unregistered");
+            } catch (Exception ignored) {}
+            networkCallback = null;
         }
     }
 
@@ -320,13 +410,24 @@ public class ServerService extends Service {
     }
 
     private void stopServer() {
+        // Idempotent - avoid duplicate onServerStateChanged that cancels hide animation (e.g., onStartCommand ACTION_STOP + onDestroy)
+        if (!running && server == null && serverUrl.isEmpty()) {
+            unregisterNetworkCallback();
+            return;
+        }
+        boolean wasRunning = running;
+        unregisterNetworkCallback();
         stopServerSilently();
         running = false;
         serverUrl = "";
         AppLogger.log("ServerService", "Server stopped");
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_WAS_RUNNING, false).apply();
-        if (listener != null) {
+        if (wasRunning && listener != null) {
             listener.onServerStateChanged(false, "", null);
+        } else if (!wasRunning && listener != null) {
+            // Ensure UI is in stopped state without re-triggering animated hide (would cancel running hide transition)
+            // Only notify if listener was not yet notified for this stop
+            // For already-stopped case, still ensure UI consistency via non-animated path in Activity onResume
         }
         releaseWakeLock();
         releaseWifiLock();

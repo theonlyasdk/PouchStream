@@ -15,9 +15,18 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -148,6 +157,7 @@ public class PouchServer extends NanoHTTPD {
                     info.put("engine", "PouchStream Daemon / Java " + System.getProperty("java.version", "11"));
                 }
                 info.put("arch", arch);
+                info.put("storage", storageHelper.getStorageStats());
                 return jsonResponse(info);
             }
 
@@ -234,6 +244,9 @@ public class PouchServer extends NanoHTTPD {
 
                 String targetPath = session.getParms().get("path");
                 if (targetPath == null) targetPath = "";
+                targetPath = targetPath.replace('\\', '/').trim();
+                while (targetPath.startsWith("/")) targetPath = targetPath.substring(1);
+                while (targetPath.endsWith("/")) targetPath = targetPath.substring(0, targetPath.length() - 1);
 
                 // NanoHTTPD puts uploaded files into temp paths mapped by part name
                 int uploadedCount = 0;
@@ -242,33 +255,54 @@ public class PouchServer extends NanoHTTPD {
                     String tempFilePath = entry.getValue();
 
                     // NanoHTTPD places original filename into parms with part name as key
-                    String originalName = session.getParms().get(partName);
-                    if (originalName == null || originalName.trim().isEmpty()) {
-                        originalName = partName;
+                    String rawName = session.getParms().get(partName);
+                    if (rawName == null || rawName.trim().isEmpty()) {
+                        rawName = partName;
                     }
-                    if (originalName.contains("/")) {
-                        originalName = originalName.substring(originalName.lastIndexOf('/') + 1);
+                    rawName = rawName.replace('\\', '/').trim();
+                    while (rawName.startsWith("/")) rawName = rawName.substring(1);
+
+                    // Separate relative subfolder from leaf filename
+                    String fileDir = targetPath;
+                    String leafName = rawName;
+                    if (rawName.contains("/")) {
+                        String subDir = rawName.substring(0, rawName.lastIndexOf('/'));
+                        leafName = rawName.substring(rawName.lastIndexOf('/') + 1);
+                        if (targetPath.isEmpty()) {
+                            fileDir = subDir;
+                        } else {
+                            fileDir = targetPath + "/" + subDir;
+                        }
                     }
-                    if (originalName.contains("\\")) {
-                        originalName = originalName.substring(originalName.lastIndexOf('\\') + 1);
-                    }
+                    while (fileDir.startsWith("/")) fileDir = fileDir.substring(1);
+                    while (fileDir.endsWith("/")) fileDir = fileDir.substring(0, fileDir.length() - 1);
 
                     if (tempFilePath != null) {
                         File tempFile = new File(tempFilePath);
-                        if (tempFile.exists() && tempFile.length() > 0) {
-                            String mime = StorageHelper.getMimeType(originalName, "application/octet-stream");
-                            DocumentFile created = storageHelper.createFile(targetPath, originalName, mime);
-                            if (created != null) {
-                                try (InputStream is = new FileInputStream(tempFile);
-                                     OutputStream os = storageHelper.openOutputStream(created)) {
-                                    byte[] buf = new byte[16384];
-                                    int n;
-                                    while ((n = is.read(buf)) != -1) {
-                                        os.write(buf, 0, n);
+                        try {
+                            if (tempFile.exists()) {
+                                storageHelper.ensureDirectory(fileDir);
+                                if (!leafName.isEmpty()) {
+                                    String mime = StorageHelper.getMimeType(leafName, "application/octet-stream");
+                                    DocumentFile created = storageHelper.createFile(fileDir, leafName, mime);
+                                    if (created != null) {
+                                        try (InputStream is = new FileInputStream(tempFile);
+                                             OutputStream os = storageHelper.openOutputStream(created)) {
+                                            byte[] buf = new byte[16384];
+                                            int n;
+                                            while ((n = is.read(buf)) != -1) {
+                                                os.write(buf, 0, n);
+                                            }
+                                            os.flush();
+                                            uploadedCount++;
+                                        }
                                     }
-                                    os.flush();
-                                    uploadedCount++;
                                 }
+                            }
+                        } finally {
+                            if (tempFile.exists()) {
+                                //noinspection ResultOfMethodCallIgnored
+                                tempFile.delete();
                             }
                         }
                     }
@@ -339,8 +373,148 @@ public class PouchServer extends NanoHTTPD {
                 return jsonResponse(res);
             }
 
+            case "/api/zip": {
+                return handleZip(session);
+            }
+
             default:
                 return errorResponse(Response.Status.NOT_FOUND, "API endpoint not found: " + uri);
+        }
+    }
+
+    private Response handleZip(IHTTPSession session) throws Exception {
+        if (!storageHelper.isValid()) {
+            return errorResponse(Response.Status.BAD_REQUEST, "Storage not ready");
+        }
+        Map<String, String> parms = session.getParms();
+        String pathsParam = parms.get("paths");
+        String pathParam = parms.get("path");
+
+        List<String> pathsList = new ArrayList<>();
+        if (pathsParam != null && !pathsParam.trim().isEmpty()) {
+            String[] split = pathsParam.split(",");
+            for (String p : split) {
+                String clean = p.trim();
+                if (!clean.isEmpty()) {
+                    pathsList.add(clean);
+                }
+            }
+        }
+
+        final DocumentFile targetDoc;
+        final String zipName;
+        if (!pathsList.isEmpty()) {
+            targetDoc = null;
+            zipName = "selected_files.zip";
+        } else {
+            String cleanPath = pathParam != null ? pathParam : "";
+            targetDoc = storageHelper.findByRelativePath(cleanPath);
+            if (targetDoc == null) {
+                return errorResponse(Response.Status.NOT_FOUND, "Target not found: " + cleanPath);
+            }
+            if (targetDoc.isFile()) {
+                String fileName = targetDoc.getName();
+                zipName = (fileName != null && !fileName.isEmpty() ? fileName : "file") + ".zip";
+            } else {
+                String folderName = targetDoc.getName();
+                if (folderName == null || folderName.isEmpty()) {
+                    folderName = storageHelper.getRootName();
+                }
+                zipName = folderName + ".zip";
+            }
+        }
+
+        PipedInputStream pis = new PipedInputStream(65536);
+        PipedOutputStream pos = new PipedOutputStream(pis);
+
+        new Thread(() -> {
+            try (ZipOutputStream zos = new ZipOutputStream(pos)) {
+                zos.setLevel(Deflater.DEFAULT_COMPRESSION);
+                Set<String> addedEntries = new HashSet<>();
+                if (!pathsList.isEmpty()) {
+                    for (String itemRelPath : pathsList) {
+                        DocumentFile itemDoc = storageHelper.findByRelativePath(itemRelPath);
+                        if (itemDoc == null || !itemDoc.exists()) continue;
+                        if (itemDoc.isDirectory()) {
+                            zipDirectoryRecursively(itemDoc, itemDoc.getName() + "/", zos, addedEntries);
+                        } else {
+                            zipFile(itemDoc, itemDoc.getName(), zos, addedEntries);
+                        }
+                    }
+                } else if (targetDoc != null) {
+                    if (targetDoc.isDirectory()) {
+                        DocumentFile[] children = targetDoc.listFiles();
+                        if (children != null) {
+                            for (DocumentFile child : children) {
+                                String name = child.getName();
+                                if (name == null || name.startsWith(".")) continue;
+                                if (child.isDirectory()) {
+                                    zipDirectoryRecursively(child, name + "/", zos, addedEntries);
+                                } else {
+                                    zipFile(child, name, zos, addedEntries);
+                                }
+                            }
+                        }
+                    } else {
+                        String name = targetDoc.getName();
+                        zipFile(targetDoc, name != null ? name : "file", zos, addedEntries);
+                    }
+                }
+                zos.finish();
+            } catch (Exception e) {
+                AppLogger.log("PouchServer", "Zip streaming interrupted or completed: " + e.getMessage());
+            } finally {
+                try {
+                    pos.close();
+                } catch (Exception ignored) {}
+            }
+        }, "ZipStreamingThread").start();
+
+        String safeZipName = zipName.replace("\"", "_");
+        Response res = newChunkedResponse(Response.Status.OK, "application/zip", pis);
+        res.addHeader("Content-Disposition", "attachment; filename=\"" + safeZipName + "\"");
+        return res;
+    }
+
+    private void zipFile(DocumentFile doc, String entryName, ZipOutputStream zos, Set<String> addedEntries) throws Exception {
+        if (addedEntries.contains(entryName)) return;
+        addedEntries.add(entryName);
+        ZipEntry entry = new ZipEntry(entryName);
+        long lastMod = doc.lastModified();
+        if (lastMod > 0) {
+            entry.setTime(lastMod);
+        }
+        zos.putNextEntry(entry);
+        try (InputStream is = storageHelper.openInputStream(doc)) {
+            if (is != null) {
+                byte[] buf = new byte[16384];
+                int n;
+                while ((n = is.read(buf)) != -1) {
+                    zos.write(buf, 0, n);
+                }
+            }
+        }
+        zos.closeEntry();
+    }
+
+    private void zipDirectoryRecursively(DocumentFile dir, String dirPrefix, ZipOutputStream zos, Set<String> addedEntries) throws Exception {
+        if (!addedEntries.contains(dirPrefix)) {
+            addedEntries.add(dirPrefix);
+            ZipEntry dirEntry = new ZipEntry(dirPrefix);
+            zos.putNextEntry(dirEntry);
+            zos.closeEntry();
+        }
+        DocumentFile[] children = dir.listFiles();
+        if (children == null) return;
+        for (DocumentFile child : children) {
+            String name = child.getName();
+            if (name == null || name.startsWith(".")) continue;
+            String childPath = dirPrefix + name;
+            if (child.isDirectory()) {
+                zipDirectoryRecursively(child, childPath + "/", zos, addedEntries);
+            } else {
+                zipFile(child, childPath, zos, addedEntries);
+            }
         }
     }
 
@@ -375,71 +549,88 @@ public class PouchServer extends NanoHTTPD {
             fileLen = pfd.getStatSize();
         }
 
-        if (rangeHeader != null && rangeHeader.startsWith("bytes=") && fileLen > 0) {
-            String rangeValue = rangeHeader.substring("bytes=".length()).trim();
-            long start = 0;
-            long end = fileLen - 1;
+        try {
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=") && fileLen > 0) {
+                String rangeValue = rangeHeader.substring("bytes=".length()).trim();
+                long start = 0;
+                long end = fileLen - 1;
 
-            int dashIdx = rangeValue.indexOf('-');
-            if (dashIdx != -1) {
-                String startStr = rangeValue.substring(0, dashIdx).trim();
-                String endStr = rangeValue.substring(dashIdx + 1).trim();
+                int dashIdx = rangeValue.indexOf('-');
+                if (dashIdx != -1) {
+                    String startStr = rangeValue.substring(0, dashIdx).trim();
+                    String endStr = rangeValue.substring(dashIdx + 1).trim();
 
-                if (!startStr.isEmpty()) {
-                    try {
-                        start = Long.parseLong(startStr);
-                    } catch (NumberFormatException ignored) {}
+                    if (startStr.isEmpty()) {
+                        // Suffix-byte-range: bytes=-500 (request last 500 bytes per RFC 7233)
+                        if (!endStr.isEmpty()) {
+                            try {
+                                long suffixLength = Long.parseLong(endStr);
+                                start = Math.max(0, fileLen - suffixLength);
+                                end = fileLen - 1;
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    } else {
+                        try {
+                            start = Long.parseLong(startStr);
+                        } catch (NumberFormatException ignored) {}
+                        if (!endStr.isEmpty()) {
+                            try {
+                                end = Long.parseLong(endStr);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
                 }
-                if (!endStr.isEmpty()) {
-                    try {
-                        end = Long.parseLong(endStr);
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
 
-            if (start > end || start >= fileLen) {
-                pfd.close();
-                Response res = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
-                res.addHeader("Content-Range", "bytes */" + fileLen);
+                if (start > end || start >= fileLen) {
+                    pfd.close();
+                    Response res = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
+                    res.addHeader("Content-Range", "bytes */" + fileLen);
+                    return res;
+                }
+
+                end = Math.min(end, fileLen - 1);
+                long contentLength = end - start + 1;
+
+                // AutoCloseInputStream closes pfd when stream is closed
+                ParcelFileDescriptor.AutoCloseInputStream fis = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                // Seek to start position using FileChannel
+                try {
+                    fis.getChannel().position(start);
+                } catch (Exception e) {
+                    long skipped = 0;
+                    while (skipped < start) {
+                        long s = fis.skip(start - skipped);
+                        if (s <= 0) break;
+                        skipped += s;
+                    }
+                }
+
+                BoundedInputStream boundedStream = new BoundedInputStream(fis, contentLength);
+                Response res = newFixedLengthResponse(Response.Status.PARTIAL_CONTENT, mime, boundedStream, contentLength);
+                res.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + fileLen);
+                res.addHeader("Accept-Ranges", "bytes");
+                res.addHeader("Content-Length", String.valueOf(contentLength));
+                if (isDownload) {
+                    res.addHeader("Content-Disposition", "attachment; filename=\"" + doc.getName() + "\"");
+                }
                 return res;
             }
 
-            end = Math.min(end, fileLen - 1);
-            long contentLength = end - start + 1;
-
-            FileInputStream fis = new FileInputStream(pfd.getFileDescriptor());
-            // Seek to start position using FileChannel
-            try {
-                fis.getChannel().position(start);
-            } catch (Exception e) {
-                long skipped = 0;
-                while (skipped < start) {
-                    long s = fis.skip(start - skipped);
-                    if (s <= 0) break;
-                    skipped += s;
-                }
-            }
-
-            BoundedInputStream boundedStream = new BoundedInputStream(fis, contentLength);
-            Response res = newFixedLengthResponse(Response.Status.PARTIAL_CONTENT, mime, boundedStream, contentLength);
-            res.addHeader("Content-Range", "bytes " + start + "-" + end + "/" + fileLen);
+            // Full content request (200 OK) - AutoCloseInputStream closes pfd when stream is closed
+            ParcelFileDescriptor.AutoCloseInputStream fis = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+            Response res = newFixedLengthResponse(Response.Status.OK, mime, fis, fileLen);
             res.addHeader("Accept-Ranges", "bytes");
-            res.addHeader("Content-Length", String.valueOf(contentLength));
+            res.addHeader("Content-Length", String.valueOf(fileLen));
             if (isDownload) {
                 res.addHeader("Content-Disposition", "attachment; filename=\"" + doc.getName() + "\"");
             }
             return res;
+        } catch (Exception e) {
+            try {
+                pfd.close();
+            } catch (Exception ignored) {}
+            throw e;
         }
-
-        // Full content request (200 OK)
-        FileInputStream fis = new FileInputStream(pfd.getFileDescriptor());
-        Response res = newFixedLengthResponse(Response.Status.OK, mime, fis, fileLen);
-        res.addHeader("Accept-Ranges", "bytes");
-        res.addHeader("Content-Length", String.valueOf(fileLen));
-        if (isDownload) {
-            res.addHeader("Content-Disposition", "attachment; filename=\"" + doc.getName() + "\"");
-        }
-        return res;
     }
 
     private Response handleStaticAssets(String uri) {

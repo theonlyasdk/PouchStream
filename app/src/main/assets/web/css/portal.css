@@ -69,6 +69,19 @@ select.form-select,
     background-color: #060606 !important;
 }
 
+.portal-brand-icon {
+    display: inline-block;
+    vertical-align: middle;
+    color: #e5e7eb;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.portal-brand-icon:hover {
+    transform: scale(1.12);
+    color: #ffffff;
+}
+
 .portal-body {
     display: flex;
     flex: 1;
@@ -1700,5 +1713,171 @@ video::cue {
     word-break: break-word;
     box-shadow: none !important;
 }
+
+/* Bottom Audio Player Bar - Slide In Animation */
+.portal-audio-bar {
+    z-index: 100;
+    flex-shrink: 0 !important;
+    position: relative;
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.28s ease;
+    will-change: transform, opacity;
+    margin: 0;
+    padding: 0;
+}
+.portal-audio-bar.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+.portal-audio-bar.d-none {
+    transform: translateY(100%) !important;
+    opacity: 0 !important;
+    pointer-events: none;
+}
+/* Audio bar flush - remove gap after close */
+.portal-audio-bar .audio-bar-inner {
+    padding-left: 0.5rem !important;
+    padding-right: 0 !important;
+}
+.audio-icon-box {
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.12s ease;
+}
+.audio-icon-box:hover {
+    transform: scale(1.08);
+    background-color: #252525 !important;
+}
+.audio-icon-box:active {
+    transform: scale(0.96);
+}
+/* Audio volume dropup - mirror video volume dropup */
+.audio-volume-btn {
+    min-width: 48px;
+    padding: 0 0.75rem;
+}
+.audio-volume-dropdown-menu {
+    min-width: 100% !important;
+    width: 100% !important;
+    padding: 6px 0 !important;
+}
+/* Audio Visualizer - In-Flow Compact View with Resilient Slide Animation */
+#contentAudioVisualizer {
+    background: #000000 !important;
+    display: none;
+    flex-direction: column;
+    flex: 1 1 0px;
+    min-height: 0;
+    overflow: hidden;
+    border-top: 1px solid #495057 !important;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 10;
+}
+
+#contentAudioVisualizer.show {
+    display: flex !important;
+    flex: 1 1 0px !important;
+    min-height: 0 !important;
+    animation: visualizerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+#contentAudioVisualizer.closing {
+    display: flex !important;
+    flex: 1 1 0px !important;
+    min-height: 0 !important;
+    animation: visualizerSlideOut 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+#contentAudioVisualizer.d-none {
+    display: none !important;
+}
+
+@keyframes visualizerSlideIn {
+    0% {
+        transform: translateY(100%);
+        opacity: 0.2;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes visualizerSlideOut {
+    0% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+}
+.audio-visualizer-canvas {
+    background: #000000 !important;
+    border: 1px solid #495057 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.audio-cover-large {
+    background: #1a1a1a !important;
+    border: 1px solid #495057 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+.audio-progress-container {
+    width: 100%;
+    height: 6px;
+    background-color: #1f2937;
+    cursor: pointer;
+    position: relative;
+    transition: height 0.15s ease;
+}
+
+.audio-progress-container:hover {
+    height: 8px;
+}
+
+.audio-progress-buffered {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #374151;
+    width: 0%;
+    pointer-events: none;
+}
+
+.audio-progress-played {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background-color: #a855f7;
+    width: 0%;
+    pointer-events: none;
+}
+
+.audio-progress-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    display: none;
+    pointer-events: none;
+}
+
+.audio-progress-container:hover .audio-progress-thumb {
+    display: block;
+}
+
 
 

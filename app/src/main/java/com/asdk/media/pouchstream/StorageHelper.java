@@ -3,7 +3,9 @@ package com.asdk.media.pouchstream;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
+import android.os.Environment;
 import android.os.ParcelFileDescriptor;
+import android.os.StatFs;
 import android.text.TextUtils;
 import android.webkit.MimeTypeMap;
 
@@ -258,20 +260,73 @@ public class StorageHelper {
     }
 
     public DocumentFile createFolder(String parentPath, String folderName) throws Exception {
-        DocumentFile parent = findByRelativePath(parentPath);
+        DocumentFile parent = ensureDirectory(parentPath);
         if (parent == null || !parent.isDirectory()) {
             throw new IllegalArgumentException("Parent directory not found");
+        }
+        DocumentFile existing = parent.findFile(folderName);
+        if (existing != null && existing.isDirectory()) {
+            return existing;
         }
         return parent.createDirectory(folderName);
     }
 
+    public DocumentFile ensureDirectory(String relativePath) throws Exception {
+        if (rootDoc == null) return null;
+        if (relativePath == null || relativePath.trim().isEmpty() || relativePath.equals("/")) {
+            return rootDoc;
+        }
+        String cleaned = relativePath.trim();
+        while (cleaned.startsWith("/")) cleaned = cleaned.substring(1);
+        while (cleaned.endsWith("/")) cleaned = cleaned.substring(0, cleaned.length() - 1);
+        if (cleaned.isEmpty()) return rootDoc;
+
+        String[] parts = cleaned.split("/");
+        DocumentFile current = rootDoc;
+        for (String part : parts) {
+            if (part.equals(".") || part.isEmpty() || part.equals("..")) continue;
+            DocumentFile next = current.findFile(part);
+            if (next != null && !next.isDirectory()) {
+                next = null;
+            }
+            if (next == null) {
+                DocumentFile[] list = current.listFiles();
+                if (list != null) {
+                    for (DocumentFile df : list) {
+                        if (part.equalsIgnoreCase(df.getName()) && df.isDirectory()) {
+                            next = df;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (next == null) {
+                next = current.createDirectory(part);
+            }
+            if (next == null || !next.isDirectory()) {
+                throw new IllegalStateException("Failed to create directory: " + part);
+            }
+            current = next;
+        }
+        return current;
+    }
+
     public DocumentFile createFile(String parentPath, String fileName, String mimeType) throws Exception {
-        DocumentFile parent = findByRelativePath(parentPath);
+        DocumentFile parent = ensureDirectory(parentPath);
         if (parent == null || !parent.isDirectory()) {
             throw new IllegalArgumentException("Parent directory not found");
         }
         if (TextUtils.isEmpty(mimeType)) {
             mimeType = getMimeType(fileName, "application/octet-stream");
+        }
+        DocumentFile existing = parent.findFile(fileName);
+        if (existing != null) {
+            if (existing.isDirectory()) {
+                throw new IllegalArgumentException("A directory with name '" + fileName + "' already exists");
+            }
+            // Directly reuse the existing file instead of deleting and recreating.
+            // This avoids duplicate "file (1).ext" creations caused by asynchronous SAF deletion indexing.
+            return existing;
         }
         return parent.createFile(mimeType, fileName);
     }
@@ -301,7 +356,54 @@ public class StorageHelper {
     }
 
     public OutputStream openOutputStream(DocumentFile doc) throws Exception {
-        return context.getContentResolver().openOutputStream(doc.getUri(), "w");
+        return context.getContentResolver().openOutputStream(doc.getUri(), "wt");
+    }
+
+    /**
+     * Resolves storage capacity metrics (total, free, used bytes) using StatFs.
+     */
+    public JSONObject getStorageStats() {
+        JSONObject obj = new JSONObject();
+        try {
+            String targetPath = null;
+            if (rootUri != null) {
+                String fullDisplay = getFullDisplayPath(context, rootUri);
+                if (fullDisplay != null && fullDisplay.startsWith("/")) {
+                    File dir = new File(fullDisplay);
+                    while (dir != null && !dir.exists()) {
+                        dir = dir.getParentFile();
+                    }
+                    if (dir != null && dir.exists()) {
+                        targetPath = dir.getAbsolutePath();
+                    }
+                }
+            }
+            if (targetPath == null) {
+                File extDir = Environment.getExternalStorageDirectory();
+                if (extDir != null && extDir.exists()) {
+                    targetPath = extDir.getAbsolutePath();
+                } else {
+                    targetPath = context.getFilesDir().getAbsolutePath();
+                }
+            }
+
+            StatFs stat = new StatFs(targetPath);
+            long blockSize = stat.getBlockSizeLong();
+            long totalBlocks = stat.getBlockCountLong();
+            long availableBlocks = stat.getAvailableBlocksLong();
+
+            long totalBytes = totalBlocks * blockSize;
+            long freeBytes = availableBlocks * blockSize;
+            long usedBytes = Math.max(0L, totalBytes - freeBytes);
+
+            obj.put("totalBytes", totalBytes);
+            obj.put("freeBytes", freeBytes);
+            obj.put("usedBytes", usedBytes);
+            obj.put("path", targetPath);
+        } catch (Exception e) {
+            AppLogger.log("StorageHelper", "Failed to retrieve storage stats: " + e.getMessage());
+        }
+        return obj;
     }
 
     public Context getContext() {

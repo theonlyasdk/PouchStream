@@ -9,6 +9,8 @@ activityKtx = "1.13.0"
 constraintlayout = "2.2.2"
 nanohttpd = "2.3.1"
 documentfile = "1.0.1"
+zxing = "3.5.3"
+transition = "1.5.0"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -20,6 +22,8 @@ activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
 documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+transition = { group = "androidx.transition", name = "transition", version.ref = "transition" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

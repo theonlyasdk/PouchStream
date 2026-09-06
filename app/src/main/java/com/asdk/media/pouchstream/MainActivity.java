@@ -12,11 +12,13 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
-import android.transition.AutoTransition;
-import android.transition.TransitionManager;
+import androidx.transition.AutoTransition;
+import androidx.transition.TransitionManager;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -49,6 +51,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     private TextView tvStatus;
     private TextView tvServerUrl;
     private TextView tvSelectedFolder;
+    private TextView tvStorageCapacity;
     private LinearLayout layoutUrlContainer;
     private ViewGroup mainContent;
     private Button btnCopyUrl;
@@ -59,6 +62,10 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     private ColorStateList defaultButtonTint;
     private SharedPreferences prefs;
     private Uri selectedFolderUri;
+    private boolean lastRunningState = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private AlertDialog qrDialog;
+    private java.util.concurrent.ExecutorService qrExecutor;
 
     private final ActivityResultLauncher<Uri> folderPickerLauncher = registerForActivityResult(
             new ActivityResultContracts.OpenDocumentTree(),
@@ -98,6 +105,8 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
 
         initViews();
         loadSavedPreferences();
+        updateUiState(ServerService.isRunning(), ServerService.getServerUrl(), false);
+        lastRunningState = ServerService.isRunning();
         requestNotificationPermissionIfNeeded();
         checkBatteryOptimization();
     }
@@ -106,8 +115,13 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         tvStatus = findViewById(R.id.tvStatus);
         tvServerUrl = findViewById(R.id.tvServerUrl);
         tvSelectedFolder = findViewById(R.id.tvSelectedFolder);
+        tvStorageCapacity = findViewById(R.id.tvStorageCapacity);
         layoutUrlContainer = findViewById(R.id.layoutUrlContainer);
         mainContent = findViewById(R.id.main_content);
+        // Disable default LayoutTransition to avoid conflict with TransitionManager (trivial animateLayoutChanges toggle breaks collapse animation)
+        if (mainContent != null) {
+            mainContent.setLayoutTransition(null);
+        }
         btnCopyUrl = findViewById(R.id.btnCopyUrl);
         btnOpenBrowser = findViewById(R.id.btnOpenBrowser);
         btnChooseFolder = findViewById(R.id.btnChooseFolder);
@@ -154,8 +168,36 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         } else {
             tvSelectedFolder.setText("No folder selected");
         }
+        updateStorageSummary();
+        // Do not call updateUiState here - let caller decide animate flag (prevents duplicate that cancels hide animation)
+    }
 
-        updateUiState(ServerService.isRunning(), ServerService.getServerUrl(), false);
+    private void updateStorageSummary() {
+        if (tvStorageCapacity == null) return;
+        if (selectedFolderUri != null) {
+            try {
+                StorageHelper helper = new StorageHelper(this, selectedFolderUri);
+                org.json.JSONObject stats = helper.getStorageStats();
+                long freeBytes = stats.optLong("freeBytes", 0);
+                long totalBytes = stats.optLong("totalBytes", 0);
+                if (totalBytes > 0) {
+                    String freeStr = formatStorageBytes(freeBytes);
+                    String totalStr = formatStorageBytes(totalBytes);
+                    tvStorageCapacity.setText(freeStr + " free of " + totalStr);
+                    tvStorageCapacity.setVisibility(View.VISIBLE);
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
+        tvStorageCapacity.setVisibility(View.GONE);
+    }
+
+    private String formatStorageBytes(long bytes) {
+        if (bytes <= 0) return "0 B";
+        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
+        int digitGroups = (int) (Math.log10(bytes) / Math.log10(1024));
+        digitGroups = Math.min(digitGroups, units.length - 1);
+        return String.format(java.util.Locale.US, "%.1f %s", bytes / Math.pow(1024, digitGroups), units[digitGroups]);
     }
 
     private void onFolderSelected(Uri uri) {
@@ -172,6 +214,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                     .apply();
 
             tvSelectedFolder.setText(fullPath);
+            updateStorageSummary();
             AppLogger.log("MainActivity", "Selected folder: " + fullPath);
             Toast.makeText(this, "Folder selected: " + fullPath, Toast.LENGTH_SHORT).show();
 
@@ -280,7 +323,10 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_logs) {
+        if (id == R.id.action_qrcode) {
+            showQrCodeDialog();
+            return true;
+        } else if (id == R.id.action_logs) {
             startActivity(new Intent(this, LogActivity.class));
             return true;
         } else if (id == R.id.action_settings) {
@@ -291,6 +337,114 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void showQrCodeDialog() {
+        if (!ServerService.isRunning() || TextUtils.isEmpty(ServerService.getServerUrl())) {
+            if (selectedFolderUri == null) {
+                new AlertDialog.Builder(this)
+                        .setTitle("Server Not Running")
+                        .setMessage("No folder is selected and server is stopped. Please choose a folder to start the server.")
+                        .setPositiveButton("Choose Folder", (d, w) -> folderPickerLauncher.launch(null))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            } else {
+                new AlertDialog.Builder(this)
+                        .setTitle("Server Not Running")
+                        .setMessage("The server is currently stopped. Would you like to start the server now to share the QR code?")
+                        .setPositiveButton("Start Server", (d, w) -> {
+                            startServerService();
+                            mainHandler.postDelayed(this::showQrCodeDialog, 800);
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
+            return;
+        }
+
+        if (qrDialog != null && qrDialog.isShowing()) {
+            try {
+                qrDialog.dismiss();
+            } catch (Exception ignored) {}
+            qrDialog = null;
+        }
+        if (qrExecutor != null && !qrExecutor.isShutdown()) {
+            qrExecutor.shutdownNow();
+            qrExecutor = null;
+        }
+
+        String url = ServerService.getServerUrl();
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_qr_code, null);
+        TextView tvUrl = dialogView.findViewById(R.id.tvQrServerUrl);
+        android.widget.ProgressBar progressBar = dialogView.findViewById(R.id.qrProgressBar);
+        android.widget.ImageView ivQr = dialogView.findViewById(R.id.ivQrCode);
+
+        tvUrl.setText(url);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Share Server via QR Code")
+                .setView(dialogView)
+                .setPositiveButton("Close", null)
+                .setNeutralButton("Copy Link", (d, w) -> {
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    ClipData clip = ClipData.newPlainText("PouchStream URL", url);
+                    clipboard.setPrimaryClip(clip);
+                    Toast.makeText(this, "Copied URL to clipboard", Toast.LENGTH_SHORT).show();
+                })
+                .create();
+
+        dialog.setOnDismissListener(d -> {
+            if (qrDialog == dialog) {
+                qrDialog = null;
+            }
+            if (qrExecutor != null && !qrExecutor.isShutdown()) {
+                qrExecutor.shutdownNow();
+                qrExecutor = null;
+            }
+        });
+
+        qrDialog = dialog;
+        dialog.show();
+
+        qrExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        qrExecutor.execute(() -> {
+            try {
+                int size = 600;
+                com.google.zxing.qrcode.QRCodeWriter writer = new com.google.zxing.qrcode.QRCodeWriter();
+                java.util.Map<com.google.zxing.EncodeHintType, Object> hints = new java.util.EnumMap<>(com.google.zxing.EncodeHintType.class);
+                hints.put(com.google.zxing.EncodeHintType.MARGIN, 1);
+                com.google.zxing.common.BitMatrix bitMatrix = writer.encode(url, com.google.zxing.BarcodeFormat.QR_CODE, size, size, hints);
+                if (Thread.currentThread().isInterrupted()) return;
+                int width = bitMatrix.getWidth();
+                int height = bitMatrix.getHeight();
+                int[] pixels = new int[width * height];
+                for (int y = 0; y < height; y++) {
+                    int offset = y * width;
+                    for (int x = 0; x < width; x++) {
+                        pixels[offset + x] = bitMatrix.get(x, y) ? Color.BLACK : Color.WHITE;
+                    }
+                }
+                if (Thread.currentThread().isInterrupted()) return;
+                android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565);
+                bitmap.setPixels(pixels, 0, width, 0, 0, width, height);
+
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed() && qrDialog != null && qrDialog.isShowing()) {
+                        progressBar.setVisibility(View.GONE);
+                        ivQr.setImageBitmap(bitmap);
+                        ivQr.setVisibility(View.VISIBLE);
+                    }
+                });
+            } catch (Exception e) {
+                AppLogger.log("MainActivity", "Failed to generate QR code: " + e.getMessage(), e);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed() && qrDialog != null && qrDialog.isShowing()) {
+                        progressBar.setVisibility(View.GONE);
+                        Toast.makeText(MainActivity.this, "Failed to generate QR code", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+        });
     }
 
     private void showAboutDialog() {
@@ -315,13 +469,18 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         super.onResume();
         ServerService.setListener(this);
         loadSavedPreferences();
-        updateUiState(ServerService.isRunning(), ServerService.getServerUrl(), false);
-        updateKeepAwake(ServerService.isRunning());
+        boolean nowRunning = ServerService.isRunning();
+        // Animate only if running state changed while paused (e.g., stopped via notification). Button stop while resumed is handled via onServerStateChanged with animate=true.
+        boolean animate = nowRunning != lastRunningState;
+        updateUiState(nowRunning, ServerService.getServerUrl(), animate);
+        updateKeepAwake(nowRunning);
+        lastRunningState = nowRunning;
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        lastRunningState = ServerService.isRunning();
         ServerService.setListener(null);
     }
 
@@ -349,9 +508,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     private void updateUiState(boolean running, String url, boolean animate) {
         updateKeepAwake(running);
         if (running) {
-            if (animate && mainContent != null && layoutUrlContainer.getVisibility() != View.VISIBLE) {
-                beginEaseInOutTransition();
-            }
+            boolean wasVisible = layoutUrlContainer.getVisibility() == View.VISIBLE;
             tvStatus.setText("Running");
             tvServerUrl.setText(url);
             btnToggleServer.setText("Stop Server");
@@ -376,7 +533,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                         .setDuration(320).setInterpolator(new OvershootInterpolator(1.8f)).start();
 
                 // Fade + slide in the Web Access URL section fully — siblings slide via parent Transition
-                if (layoutUrlContainer.getVisibility() != View.VISIBLE) {
+                if (!wasVisible) {
                     layoutUrlContainer.animate().cancel();
                     // Prepare children for staggered fade
                     tvServerUrl.setAlpha(0f);
@@ -387,6 +544,9 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
 
                     layoutUrlContainer.setAlpha(0f);
                     layoutUrlContainer.setTranslationY(28f);
+                    if (mainContent != null) {
+                        beginEaseInOutTransition();
+                    }
                     layoutUrlContainer.setVisibility(View.VISIBLE);
                     layoutUrlContainer.animate().alpha(1f).translationY(0f)
                             .setDuration(420).setInterpolator(getEaseInOutInterpolator()).start();
@@ -426,9 +586,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                 btnToggleServer.setScaleY(1f);
             }
         } else {
-            if (animate && mainContent != null && layoutUrlContainer.getVisibility() == View.VISIBLE) {
-                beginEaseInOutTransition();
-            }
+            boolean wasVisible = layoutUrlContainer.getVisibility() == View.VISIBLE;
             tvStatus.setText("Stopped");
             btnToggleServer.setText("Start Server");
             if (defaultButtonTint != null) {
@@ -439,33 +597,48 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             btnChooseFolder.setEnabled(true);
             btnToggleServer.setEnabled(true);
 
-            if (animate && layoutUrlContainer.getVisibility() == View.VISIBLE) {
+            if (animate && wasVisible) {
                 // Ease-in-out slide: let Transition animate ChangeBounds so siblings (Shared Folder, button) glide smoothly
                 tvStatus.animate().cancel();
                 tvStatus.setScaleX(0.9f);
                 tvStatus.setScaleY(0.9f);
                 tvStatus.animate().scaleX(1f).scaleY(1f).setDuration(250).setInterpolator(getEaseInOutInterpolator()).start();
 
-                // Fade children slightly before collapse for polish, then collapse via Transition (already begun)
+                // Cancel any ongoing animators and ensure clean state for Fade transition
+                layoutUrlContainer.animate().cancel();
                 tvServerUrl.animate().cancel();
                 btnCopyUrl.animate().cancel();
                 btnOpenBrowser.animate().cancel();
-                tvServerUrl.animate().alpha(0f).setDuration(180).setInterpolator(getEaseInOutInterpolator()).start();
-                btnCopyUrl.animate().alpha(0f).setDuration(180).setInterpolator(getEaseInOutInterpolator()).start();
-                btnOpenBrowser.animate().alpha(0f).setDuration(180).setInterpolator(getEaseInOutInterpolator()).start();
+                tvServerUrl.setAlpha(1f);
+                btnCopyUrl.setAlpha(1f);
+                btnOpenBrowser.setAlpha(1f);
+                layoutUrlContainer.setAlpha(1f);
+                layoutUrlContainer.setTranslationY(0f);
+                btnCopyUrl.setTranslationY(0f);
+                btnOpenBrowser.setTranslationY(0f);
 
-                // Collapse is already animated by the Transition started above; post visibility reset
-                layoutUrlContainer.postDelayed(() -> {
-                    layoutUrlContainer.setAlpha(1f);
-                    layoutUrlContainer.setTranslationY(0f);
-                    tvServerUrl.setText("");
-                    tvServerUrl.setAlpha(1f);
-                    btnCopyUrl.setAlpha(1f);
-                    btnOpenBrowser.setAlpha(1f);
-                    btnCopyUrl.setTranslationY(0f);
-                    btnOpenBrowser.setTranslationY(0f);
-                }, 430);
-                // Trigger collapse immediately so ChangeBounds animates with ease-in-out
+                // Begin transition immediately before visibility change so ChangeBounds+Fade animate siblings and container as a group
+                if (mainContent != null) {
+                    AutoTransition transition = new AutoTransition();
+                    transition.setDuration(420);
+                    transition.setInterpolator(getEaseInOutInterpolator());
+                    transition.addListener(new androidx.transition.TransitionListenerAdapter() {
+                        @Override
+                        public void onTransitionEnd(androidx.transition.Transition trans) {
+                            // Reset for next show after collapse completes
+                            layoutUrlContainer.setAlpha(1f);
+                            layoutUrlContainer.setTranslationY(0f);
+                            tvServerUrl.setText("");
+                            tvServerUrl.setAlpha(1f);
+                            btnCopyUrl.setAlpha(1f);
+                            btnOpenBrowser.setAlpha(1f);
+                            btnCopyUrl.setTranslationY(0f);
+                            btnOpenBrowser.setTranslationY(0f);
+                            trans.removeListener(this);
+                        }
+                    });
+                    TransitionManager.beginDelayedTransition(mainContent, transition);
+                }
                 layoutUrlContainer.setVisibility(View.GONE);
             } else {
                 layoutUrlContainer.animate().cancel();
@@ -484,7 +657,8 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
 
     @Override
     public void onServerStateChanged(boolean running, String url, String error) {
-        runOnUiThread(() -> {
+        Runnable doUpdate = () -> {
+            lastRunningState = running;
             updateUiState(running, url, true);
 
             if (error != null) {
@@ -493,6 +667,27 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                 Intent logIntent = new Intent(MainActivity.this, LogActivity.class);
                 startActivity(logIntent);
             }
-        });
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            doUpdate.run();
+        } else {
+            runOnUiThread(doUpdate);
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (qrDialog != null && qrDialog.isShowing()) {
+            try {
+                qrDialog.dismiss();
+            } catch (Exception ignored) {}
+            qrDialog = null;
+        }
+        if (qrExecutor != null && !qrExecutor.isShutdown()) {
+            qrExecutor.shutdownNow();
+            qrExecutor = null;
+        }
+        mainHandler.removeCallbacksAndMessages(null);
+        super.onDestroy();
     }
 }

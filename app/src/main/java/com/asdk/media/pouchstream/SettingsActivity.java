@@ -130,6 +130,7 @@ public class SettingsActivity extends AppCompatActivity {
                 prefs.edit().putBoolean(ServerService.KEY_READ_ONLY, newVal).apply();
                 updateReadOnlySummary();
                 Toast.makeText(this, newVal ? "Read-only enabled — writes blocked" : "Read-only disabled", Toast.LENGTH_SHORT).show();
+                promptRestartServerIfNeeded("Read-Only Mode");
             });
         }
 
@@ -359,10 +360,12 @@ public class SettingsActivity extends AppCompatActivity {
                                 .putString(ServerService.KEY_AUTH_USER, user)
                                 .putString(ServerService.KEY_AUTH_PASS, pass)
                                 .apply();
-                        Toast.makeText(this, "Password protection enabled — restart server to apply", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Password protection enabled", Toast.LENGTH_SHORT).show();
+                        promptRestartServerIfNeeded("Password Protection");
                     } else {
                         prefs.edit().putBoolean(ServerService.KEY_AUTH_ENABLED, false).apply();
                         Toast.makeText(this, "Password protection disabled", Toast.LENGTH_SHORT).show();
+                        promptRestartServerIfNeeded("Password Protection");
                     }
                     updateAuthSummary();
                 })
@@ -371,6 +374,7 @@ public class SettingsActivity extends AppCompatActivity {
                     prefs.edit().putBoolean(ServerService.KEY_AUTH_ENABLED, false).apply();
                     updateAuthSummary();
                     Toast.makeText(this, "Password protection disabled", Toast.LENGTH_SHORT).show();
+                    promptRestartServerIfNeeded("Password Protection");
                 })
                 .show();
     }
@@ -489,9 +493,32 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void savePort(int port) {
+        int oldPort = prefs.getInt(ServerService.KEY_PORT, 8080);
         prefs.edit().putInt(ServerService.KEY_PORT, port).apply();
         tvPrefPortSummary.setText(String.valueOf(port));
         Toast.makeText(this, "Port set to " + port, Toast.LENGTH_SHORT).show();
+        if (oldPort != port) {
+            promptRestartServerIfNeeded("Server Port (" + port + ")");
+        }
+    }
+
+    private void promptRestartServerIfNeeded(String settingName) {
+        if (!ServerService.isRunning()) return;
+        new AlertDialog.Builder(this)
+                .setTitle("Restart Server?")
+                .setMessage(settingName + " changed while the server is running. Would you like to restart it now to apply changes?")
+                .setPositiveButton("Restart Now", (d, w) -> {
+                    Intent restartIntent = new Intent(this, ServerService.class);
+                    restartIntent.setAction(ServerService.ACTION_START);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(restartIntent);
+                    } else {
+                        startService(restartIntent);
+                    }
+                    Toast.makeText(this, "Restarting server...", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Later", null)
+                .show();
     }
 
     private void showIpDialog() {
@@ -546,6 +573,7 @@ public class SettingsActivity extends AppCompatActivity {
                     updateReadOnlySummary();
                     updateKeepAwakeSummary();
                     Toast.makeText(this, "Settings restored to default", Toast.LENGTH_SHORT).show();
+                    promptRestartServerIfNeeded("Settings");
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

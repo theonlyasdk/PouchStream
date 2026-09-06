@@ -208,6 +208,7 @@ export const ImageViewer = {
         const videoView = document.getElementById('contentVideoView');
         const editorView = document.getElementById('contentEditorView');
         const settingsView = document.getElementById('contentSettingsView');
+        const pdfView = document.getElementById('contentPdfView');
         if (videoView) {
             videoView.classList.add('d-none');
             videoView.classList.remove('d-flex');
@@ -219,6 +220,10 @@ export const ImageViewer = {
         if (settingsView) {
             settingsView.classList.add('d-none');
             settingsView.classList.remove('d-flex');
+        }
+        if (pdfView) {
+            pdfView.classList.add('d-none');
+            pdfView.classList.remove('d-flex');
         }
 
         if (workspaceView) workspaceView.classList.add('d-none');

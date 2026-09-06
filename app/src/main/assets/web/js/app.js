@@ -7,6 +7,8 @@ import { UI } from './ui.js';
 import { Editor } from './editor.js';
 import { Player } from './player.js';
 import { ImageViewer } from './imageViewer.js';
+import { AudioPlayer } from './audioPlayer.js';
+import { PdfViewer } from './pdfViewer.js';
 
 let pollTimer = null;
 let uploadModalInstance = null;
@@ -18,9 +20,12 @@ let pendingRenamePath = null;
 let contextMenuItem = null;
 let activeRenameDismiss = null;
 
-// Global error handlers to alert if any JS error occurs
+// Global error logging handlers
 window.addEventListener('error', (event) => {
-    alert(`JavaScript Error: ${event.message}\nFile: ${event.filename}\nLine: ${event.lineno}`);
+    console.error('JavaScript Error:', event.message, 'at', event.filename, ':', event.lineno);
+    if (UI && typeof UI.showToast === 'function') {
+        UI.showToast('Runtime Notice', event.message, 'warning');
+    }
 });
 
 window.addEventListener('unhandledrejection', (event) => {
@@ -35,7 +40,9 @@ window.addEventListener('unhandledrejection', (event) => {
         return;
     }
     console.error('Unhandled Promise Rejection:', event.reason);
-    alert(`Unhandled Promise Rejection: ${msg}`);
+    if (UI && typeof UI.showToast === 'function') {
+        UI.showToast('Error', msg, 'danger');
+    }
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -47,6 +54,8 @@ async function initApp() {
     Editor.init(() => navigateTo(State.currentPath, true, false));
     Player.init();
     ImageViewer.init();
+    AudioPlayer.init();
+    PdfViewer.init();
 
     setupTopBar();
     setupSidebar();
@@ -65,10 +74,12 @@ async function initApp() {
     // Listen for browser Back/Forward navigation
     window.addEventListener('popstate', (e) => {
         const targetPath = (e.state && typeof e.state.path === 'string') ? e.state.path : '';
-        // Close editor, player, or image preview if open
+        // Close editor, player, or image/pdf preview if open
         Editor.close();
         Player.stop();
         ImageViewer.close();
+        PdfViewer.close();
+        if (typeof AudioPlayer !== 'undefined' && AudioPlayer.closeVisualizer) AudioPlayer.closeVisualizer();
         navigateTo(targetPath, false, false);
     });
 
@@ -90,7 +101,7 @@ function restoreLastOpenedFile() {
         // Defer slightly so initial UI settles; validate by trying to open — if file gone, clear storage
         setTimeout(() => {
             // Don't restore if user already opened something else
-            if (Player.currentPath || Editor.activePath || ImageViewer.currentPath) return;
+            if (Player.currentPath || Editor.activePath || ImageViewer.currentPath || PdfViewer.activePath || (typeof AudioPlayer !== 'undefined' && AudioPlayer.currentPath)) return;
             if (type === 'video') {
                 Player.play(path, name || path.split('/').pop());
             } else if (type === 'editor') {
@@ -99,6 +110,8 @@ function restoreLastOpenedFile() {
                 });
             } else if (type === 'image') {
                 ImageViewer.open(path, name || path.split('/').pop());
+            } else if (type === 'pdf') {
+                PdfViewer.open(path, name || path.split('/').pop());
             }
         }, 400);
     } catch {}
@@ -182,6 +195,13 @@ async function loadServerInfo() {
         if (hostArch && info.arch) {
             hostArch.textContent = info.arch;
         }
+
+        const storageCapacity = document.getElementById('settingsStorageCapacity');
+        if (storageCapacity && info.storage && info.storage.totalBytes) {
+            const freeGb = (info.storage.freeBytes / (1024 * 1024 * 1024)).toFixed(1);
+            const totalGb = (info.storage.totalBytes / (1024 * 1024 * 1024)).toFixed(1);
+            storageCapacity.textContent = `${freeGb} GB free of ${totalGb} GB`;
+        }
     } catch (e) {
         console.warn('Could not load server metadata:', e);
     }
@@ -204,6 +224,8 @@ async function navigateTo(path, silent = false, pushHistory = true) {
         Editor.close();
         Player.stop();
         ImageViewer.close();
+        PdfViewer.close();
+        if (typeof AudioPlayer !== 'undefined' && AudioPlayer.closeVisualizer) AudioPlayer.closeVisualizer();
         setTableLoading(true);
     }
 
@@ -251,7 +273,9 @@ function renderActiveTable() {
         (p, name) => { State.pushRecent({path:p, name, isDirectory:false}); ImageViewer.open(p, name); },
         (p, name) => promptDelete(p, name),
         (p, name) => promptRename(p, name),
-        (e, item) => showRowContextMenu(e, item)
+        (e, item) => showRowContextMenu(e, item),
+        (p, name) => { State.pushRecent({path:p, name, isDirectory:false}); AudioPlayer.play(p, name); },
+        (p, name) => { State.pushRecent({path:p, name, isDirectory:false}); PdfViewer.open(p, name); }
     );
 }
 
@@ -338,14 +362,18 @@ function setupSidebar() {
     links.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            // If a viewer is open (video/image/editor/settings), close it first so category switch is visible
+            // If a viewer is open (video/image/editor/pdf/audio visualizer/settings), close it first so category switch is visible
             const isVideoOpen = !document.getElementById('contentVideoView')?.classList.contains('d-none');
             const isImageOpen = !document.getElementById('contentImageView')?.classList.contains('d-none');
             const isEditorOpen = !document.getElementById('contentEditorView')?.classList.contains('d-none');
-            if (isVideoOpen || isImageOpen || isEditorOpen) {
+            const isPdfOpen = !document.getElementById('contentPdfView')?.classList.contains('d-none');
+            const isAudioVisOpen = !document.getElementById('contentAudioVisualizer')?.classList.contains('d-none');
+            if (isVideoOpen || isImageOpen || isEditorOpen || isPdfOpen || isAudioVisOpen) {
                 Player.stop();
                 ImageViewer.close();
                 Editor.close();
+                PdfViewer.close();
+                if (typeof AudioPlayer !== 'undefined' && AudioPlayer.closeVisualizer) AudioPlayer.closeVisualizer(true);
                 // ensure workspace/toolbar visible after closing viewers
                 const ws = document.getElementById('workspaceView');
                 const tb = document.getElementById('portalToolbar');
@@ -543,7 +571,7 @@ function setupBulkActions() {
         });
         btnCount.addEventListener('click', () => {
             State.clearSelection(); UI.updateSelectionUI(); updateBar();
-            UI.renderTable((p)=>navigateTo(p), (p,n)=>Player.play(p,n),(p,n)=>Editor.open(p,n),(p,n)=>ImageViewer.open(p,n),(p,n)=>promptDelete(p,n),(p,n)=>promptRename(p,n),(e,i)=>showRowContextMenu(e,i));
+            renderActiveTable();
         });
     }
     window.addEventListener('pouch:selectionChanged', updateBar);
@@ -557,7 +585,20 @@ function setupBulkActions() {
             else State.selectedPaths.clear();
             UI.updateSelectionUI();
             updateBar();
-            UI.renderTable((p)=>navigateTo(p), (p,n)=>Player.play(p,n),(p,n)=>Editor.open(p,n),(p,n)=>ImageViewer.open(p,n),(p,n)=>promptDelete(p,n),(p,n)=>promptRename(p,n),(e,i)=>showRowContextMenu(e,i));
+            renderActiveTable();
+        });
+    }
+    const btnBulkZip = document.getElementById('btnBulkZip');
+    if (btnBulkZip) {
+        btnBulkZip.addEventListener('click', () => {
+            const sel = [...State.selectedPaths];
+            if (sel.length === 0) return;
+            const pathsParam = sel.join(',');
+            const a = document.createElement('a');
+            a.href = `/api/zip?paths=${encodeURIComponent(pathsParam)}`;
+            a.download = 'selected_files.zip';
+            document.body.appendChild(a); a.click(); a.remove();
+            UI.showToast('Download ZIP', `Started ZIP download of ${sel.length} items`, 'success');
         });
     }
     if (btnDownload) btnDownload.addEventListener('click', async () => {
@@ -570,15 +611,12 @@ function setupBulkActions() {
             document.body.appendChild(a); a.click(); a.remove();
             UI.showToast('Download', 'Started download', 'success');
         } else {
-            // sequential downloads (ZIP via server not yet implemented — download individually)
-            UI.showToast('Bulk Download', `Downloading ${sel.length} files...`, 'primary');
-            for (const p of sel) {
-                const a = document.createElement('a');
-                a.href = `/api/stream?path=${encodeURIComponent(p)}&download=true`;
-                a.download = p.split('/').pop();
-                document.body.appendChild(a); a.click(); a.remove();
-                await new Promise(r => setTimeout(r, 350));
-            }
+            const pathsParam = sel.join(',');
+            const a = document.createElement('a');
+            a.href = `/api/zip?paths=${encodeURIComponent(pathsParam)}`;
+            a.download = 'selected_files.zip';
+            document.body.appendChild(a); a.click(); a.remove();
+            UI.showToast('Bulk Download', `Downloading ${sel.length} files as ZIP archive...`, 'success');
         }
     });
     if (btnDelete) btnDelete.addEventListener('click', async () => {
@@ -616,6 +654,91 @@ function setupBulkActions() {
     });
 }
 
+async function getFileFromEntry(fileEntry) {
+    return new Promise((resolve, reject) => {
+        fileEntry.file(resolve, reject);
+    });
+}
+
+async function readAllDirectoryEntries(directoryReader) {
+    const entries = [];
+    let readEntries = await new Promise((resolve, reject) => {
+        directoryReader.readEntries(resolve, reject);
+    });
+    while (readEntries && readEntries.length > 0) {
+        entries.push(...readEntries);
+        readEntries = await new Promise((resolve, reject) => {
+            directoryReader.readEntries(resolve, reject);
+        });
+    }
+    return entries;
+}
+
+async function traverseEntry(entry, path = '') {
+    if (entry.isFile) {
+        const file = await getFileFromEntry(entry);
+        const relPath = path ? `${path}/${file.name}` : file.name;
+        Object.defineProperty(file, 'relativePath', { value: relPath, writable: true, configurable: true });
+        return { files: [file], emptyDirs: [] };
+    } else if (entry.isDirectory) {
+        const dirPath = path ? `${path}/${entry.name}` : entry.name;
+        const reader = entry.createReader();
+        const entries = await readAllDirectoryEntries(reader);
+        if (!entries || entries.length === 0) {
+            return { files: [], emptyDirs: [dirPath] };
+        }
+        const files = [];
+        const emptyDirs = [];
+        for (const child of entries) {
+            const res = await traverseEntry(child, dirPath);
+            files.push(...res.files);
+            emptyDirs.push(...res.emptyDirs);
+        }
+        return { files, emptyDirs };
+    }
+    return { files: [], emptyDirs: [] };
+}
+
+async function extractDataTransferItems(dataTransfer) {
+    const items = dataTransfer.items;
+    if (items && items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
+        const files = [];
+        const emptyDirs = [];
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const entry = (typeof item.webkitGetAsEntry === 'function') ? item.webkitGetAsEntry() : null;
+            if (entry) {
+                const res = await traverseEntry(entry);
+                files.push(...res.files);
+                emptyDirs.push(...res.emptyDirs);
+            }
+        }
+        if (files.length > 0 || emptyDirs.length > 0) {
+            return { files, emptyDirs };
+        }
+    }
+    const rawFiles = Array.from(dataTransfer.files || []);
+    return { files: rawFiles, emptyDirs: [] };
+}
+
+async function uploadRecursivePayload(targetPath, files, emptyDirs = [], onProgress) {
+    for (const emptyDir of emptyDirs) {
+        const fullDir = targetPath ? `${targetPath}/${emptyDir}` : emptyDir;
+        const lastSlash = fullDir.lastIndexOf('/');
+        const parent = lastSlash >= 0 ? fullDir.substring(0, lastSlash) : '';
+        const name = lastSlash >= 0 ? fullDir.substring(lastSlash + 1) : fullDir;
+        try {
+            await Api.createFolder(parent, name);
+        } catch (e) {
+            console.warn('Could not pre-create directory:', fullDir, e);
+        }
+    }
+    if (files.length > 0) {
+        return await Api.uploadFiles(targetPath, files, onProgress);
+    }
+    return { success: true, uploaded: 0 };
+}
+
 function setupWorkspaceDrop() {
     const ws = document.getElementById('workspaceView');
     const overlay = document.getElementById('workspaceDropOverlay');
@@ -624,40 +747,52 @@ function setupWorkspaceDrop() {
     const progBar = document.getElementById('workspaceDropProgress');
     if (!ws || !overlay) return;
     let dragDepth = 0;
-    const showOverlay = () => { overlay.classList.remove('d-none'); overlay.classList.add('d-flex'); if (label) label.textContent = `to ${State.currentPath || 'root'}`; };
-    const hideOverlay = () => { overlay.classList.add('d-none'); overlay.classList.remove('d-flex'); dragDepth = 0; if (progWrap) progWrap.classList.add('d-none'); if (progBar) progBar.style.width='0%'; };
+    const showOverlay = () => {
+        overlay.classList.remove('d-none');
+        overlay.classList.add('d-flex');
+        if (label) label.textContent = `to ${State.currentPath || 'root'}`;
+    };
+    const hideOverlay = () => {
+        overlay.classList.add('d-none');
+        overlay.classList.remove('d-flex');
+        dragDepth = 0;
+        if (progWrap) progWrap.classList.add('d-none');
+        if (progBar) progBar.style.width = '0%';
+    };
+
     ws.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; showOverlay(); });
-    ws.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect='copy'; });
-    ws.addEventListener('dragleave', (e) => { e.preventDefault(); dragDepth--; if (dragDepth<=0) hideOverlay(); });
-    overlay.addEventListener('dragover', (e)=>{ e.preventDefault(); });
-    overlay.addEventListener('drop', async (e) => {
+    ws.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+    ws.addEventListener('dragleave', (e) => { e.preventDefault(); dragDepth--; if (dragDepth <= 0) hideOverlay(); });
+    overlay.addEventListener('dragover', (e) => { e.preventDefault(); });
+
+    const handleDrop = async (e) => {
         e.preventDefault();
-        hideOverlay();
-        const files = e.dataTransfer.files;
-        if (!files || files.length===0) return;
+        const dt = e.dataTransfer;
+        if (!dt) { hideOverlay(); return; }
+        showOverlay();
         if (progWrap) progWrap.classList.remove('d-none');
+        if (label) label.textContent = 'Scanning dropped items...';
         try {
-            await Api.uploadFiles(State.currentPath, files, (pct)=>{ if (progBar) progBar.style.width = pct+'%'; });
-            UI.showToast('Upload Complete', `Uploaded ${files.length} file(s)`, 'success');
+            const { files, emptyDirs } = await extractDataTransferItems(dt);
+            if (files.length === 0 && emptyDirs.length === 0) {
+                hideOverlay();
+                return;
+            }
+            if (label) label.textContent = `Uploading ${files.length} file(s)...`;
+            await uploadRecursivePayload(State.currentPath, files, emptyDirs, (pct) => {
+                if (progBar) progBar.style.width = `${pct}%`;
+            });
+            UI.showToast('Upload Complete', `Uploaded ${files.length} file(s)${emptyDirs.length ? ` and created ${emptyDirs.length} folder(s)` : ''}`, 'success');
             navigateTo(State.currentPath, true);
-        } catch (err) { UI.showToast('Upload Failed', err.message, 'danger'); }
-        finally { hideOverlay(); }
-    });
-    // also handle drop on overlay itself
-    ws.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        hideOverlay();
-        const files = e.dataTransfer.files;
-        if (!files || files.length===0) return;
-        if (progWrap) progWrap.classList.remove('d-none');
-        overlay.classList.remove('d-none'); overlay.classList.add('d-flex');
-        try {
-            await Api.uploadFiles(State.currentPath, files, (pct)=>{ if (progBar) progBar.style.width = pct+'%'; });
-            UI.showToast('Upload Complete', `Uploaded ${files.length} file(s)`, 'success');
-            navigateTo(State.currentPath, true);
-        } catch (err) { UI.showToast('Upload Failed', err.message, 'danger'); }
-        finally { hideOverlay(); }
-    });
+        } catch (err) {
+            UI.showToast('Upload Failed', err.message, 'danger');
+        } finally {
+            hideOverlay();
+        }
+    };
+
+    overlay.addEventListener('drop', handleDrop);
+    ws.addEventListener('drop', handleDrop);
 }
 
 function setupKeyboardHelp() {
@@ -694,6 +829,8 @@ function openSettingsView() {
     Editor.close();
     Player.stop();
     ImageViewer.close();
+    PdfViewer.close();
+    if (typeof AudioPlayer !== 'undefined' && AudioPlayer.closeVisualizer) AudioPlayer.closeVisualizer(true);
 
     const workspaceView = document.getElementById('workspaceView');
     const toolbar = document.getElementById('portalToolbar');
@@ -745,6 +882,20 @@ function setupToolbar() {
     const btnRefresh = document.getElementById('btnToolbarRefresh');
     if (btnRefresh) {
         btnRefresh.addEventListener('click', () => navigateTo(State.currentPath));
+    }
+
+    const btnDownloadFolderZip = document.getElementById('btnDownloadFolderZip');
+    if (btnDownloadFolderZip) {
+        btnDownloadFolderZip.addEventListener('click', () => {
+            const folderName = State.meta?.currentName || 'folder';
+            const a = document.createElement('a');
+            a.href = `/api/zip?path=${encodeURIComponent(State.currentPath || '')}`;
+            a.download = `${folderName}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            UI.showToast('Download ZIP', `Started ZIP download of folder "${folderName}"`, 'success');
+        });
     }
 }
 
@@ -880,23 +1031,41 @@ function showRowContextMenu(e, item) {
     if (!menu) return;
 
     const isVideo = UI.isVideo(item);
+    const isAudio = UI.isAudio(item);
+    const isPdf = UI.isPdf(item);
     const isImage = UI.isImage(item);
     const isEditable = UI.isEditable(item);
 
     const btnOpen = menu.querySelector('[data-action="open"]');
     const btnPreviewImage = menu.querySelector('[data-action="preview-image"]');
+    const btnPreviewPdf = menu.querySelector('[data-action="preview-pdf"]');
+    const btnPlayAudio = menu.querySelector('[data-action="play-audio"]');
     const btnStream = menu.querySelector('[data-action="stream"]');
     const btnEdit = menu.querySelector('[data-action="edit"]');
     const btnDownload = menu.querySelector('[data-action="download"]');
+    const btnDownloadZip = menu.querySelector('[data-action="download-zip"]');
 
     if (btnOpen) btnOpen.classList.toggle('d-none', !item.isDirectory);
     if (btnPreviewImage) btnPreviewImage.classList.toggle('d-none', !isImage);
+    if (btnPreviewPdf) btnPreviewPdf.classList.toggle('d-none', !isPdf);
+    if (btnPlayAudio) btnPlayAudio.classList.toggle('d-none', !isAudio);
     if (btnStream) btnStream.classList.toggle('d-none', !isVideo);
     if (btnEdit) btnEdit.classList.toggle('d-none', !isEditable);
     if (btnDownload) {
         btnDownload.classList.toggle('d-none', item.isDirectory);
         if (!item.isDirectory) {
             btnDownload.href = `/api/stream?path=${encodeURIComponent(item.path)}&download=true`;
+        }
+    }
+    if (btnDownloadZip) {
+        const isMultiSelect = State.selectedPaths.size > 1 && State.selectedPaths.has(item.path);
+        btnDownloadZip.classList.remove('d-none');
+        if (isMultiSelect) {
+            btnDownloadZip.innerHTML = '<ion-icon name="archive"></ion-icon> Download Selected as ZIP';
+        } else if (item.isDirectory) {
+            btnDownloadZip.innerHTML = '<ion-icon name="archive"></ion-icon> Download Folder as ZIP';
+        } else {
+            btnDownloadZip.innerHTML = '<ion-icon name="archive"></ion-icon> Download as ZIP';
         }
     }
 
@@ -1010,10 +1179,34 @@ function setupContextMenu() {
                     if (item.isDirectory) navigateTo(item.path);
                 } else if (action === 'preview-image') {
                     ImageViewer.open(item.path, item.name);
+                } else if (action === 'preview-pdf') {
+                    PdfViewer.open(item.path, item.name);
+                } else if (action === 'play-audio') {
+                    AudioPlayer.play(item.path, item.name);
                 } else if (action === 'stream') {
                     Player.play(item.path, item.name);
                 } else if (action === 'edit') {
                     Editor.open(item.path, item.name);
+                } else if (action === 'download-zip') {
+                    if (State.selectedPaths.size > 1 && State.selectedPaths.has(item.path)) {
+                        const sel = [...State.selectedPaths];
+                        const pathsParam = sel.join(',');
+                        const a = document.createElement('a');
+                        a.href = `/api/zip?paths=${encodeURIComponent(pathsParam)}`;
+                        a.download = 'selected_files.zip';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        UI.showToast('Download ZIP', `Downloading ${sel.length} selected files as ZIP archive...`, 'success');
+                    } else {
+                        const a = document.createElement('a');
+                        a.href = `/api/zip?path=${encodeURIComponent(item.path)}`;
+                        a.download = `${item.name || 'archive'}.zip`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        UI.showToast('Download ZIP', `Started ZIP download of "${item.name}"`, 'success');
+                    }
                 } else if (action === 'rename') {
                     promptRename(item.path, item.name);
                 } else if (action === 'delete') {
@@ -1044,6 +1237,15 @@ function setupContextMenu() {
                     if (curtainFile) toggleCurtain(curtainFile, true);
                 } else if (action === 'upload') {
                     if (uploadModalInstance) uploadModalInstance.show();
+                } else if (action === 'download-current-zip') {
+                    const folderName = State.meta?.currentName || 'folder';
+                    const a = document.createElement('a');
+                    a.href = `/api/zip?path=${encodeURIComponent(State.currentPath || '')}`;
+                    a.download = `${folderName}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    UI.showToast('Download ZIP', `Started ZIP download of folder "${folderName}"`, 'success');
                 } else if (action === 'refresh') {
                     navigateTo(State.currentPath);
                 } else if (action === 'properties') {
@@ -1214,6 +1416,15 @@ function setupKeyboardNavigation() {
         const rows = Array.from(document.querySelectorAll('#fileTableBody tr[data-path], #fileTableBody tr.cursor-pointer'));
         if (!rows || rows.length === 0) return;
 
+        if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            if (AudioPlayer.currentPath) {
+                e.preventDefault();
+                if (e.key === 'ArrowLeft') AudioPlayer.playPrevious();
+                else AudioPlayer.playNext();
+                return;
+            }
+        }
+
         const isUp = e.key === 'ArrowUp';
         const isDown = e.key === 'ArrowDown';
         const isEnter = e.key === 'Enter';
@@ -1312,6 +1523,9 @@ function setupDialogActions() {
     // Upload Dropzone & Actions
     const btnConfirmUpload = document.getElementById('btnConfirmUpload');
     const inputUploadFiles = document.getElementById('inputUploadFiles');
+    const inputUploadFolder = document.getElementById('inputUploadFolder');
+    const btnBrowseFiles = document.getElementById('btnBrowseFiles');
+    const btnBrowseFolder = document.getElementById('btnBrowseFolder');
     const uploadDropzone = document.getElementById('uploadDropzone');
     const uploadFilesSummary = document.getElementById('uploadFilesSummary');
     const uploadProgressContainer = document.getElementById('uploadProgressContainer');
@@ -1320,22 +1534,27 @@ function setupDialogActions() {
     const uploadPercentText = document.getElementById('uploadPercentText');
 
     let stagedFiles = [];
+    let stagedEmptyDirs = [];
 
     const updateStagedFilesSummary = () => {
         if (!uploadFilesSummary) return;
-        if (!stagedFiles || stagedFiles.length === 0) {
+        const totalItems = stagedFiles.length + stagedEmptyDirs.length;
+        if (totalItems === 0) {
             uploadFilesSummary.textContent = 'No files selected';
-        } else if (stagedFiles.length === 1) {
-            uploadFilesSummary.textContent = `${stagedFiles[0].name} (${UI.formatBytes(stagedFiles[0].size)})`;
+        } else if (stagedFiles.length === 1 && stagedEmptyDirs.length === 0) {
+            const name = stagedFiles[0].relativePath || stagedFiles[0].name;
+            uploadFilesSummary.textContent = `${name} (${UI.formatBytes(stagedFiles[0].size)})`;
         } else {
             const totalBytes = stagedFiles.reduce((acc, f) => acc + (f.size || 0), 0);
-            uploadFilesSummary.textContent = `${stagedFiles.length} files selected (${UI.formatBytes(totalBytes)})`;
+            uploadFilesSummary.textContent = `${stagedFiles.length} file(s)${stagedEmptyDirs.length ? `, ${stagedEmptyDirs.length} folder(s)` : ''} (${UI.formatBytes(totalBytes)})`;
         }
     };
 
     const resetUploadForm = () => {
         stagedFiles = [];
+        stagedEmptyDirs = [];
         if (inputUploadFiles) inputUploadFiles.value = '';
+        if (inputUploadFolder) inputUploadFolder.value = '';
         updateStagedFilesSummary();
         if (uploadProgressContainer) uploadProgressContainer.classList.add('d-none');
         if (uploadProgressBar) {
@@ -1348,9 +1567,24 @@ function setupDialogActions() {
         if (btnConfirmUpload) btnConfirmUpload.disabled = false;
     };
 
-    if (uploadDropzone && inputUploadFiles) {
-        uploadDropzone.addEventListener('click', () => {
+    if (btnBrowseFiles && inputUploadFiles) {
+        btnBrowseFiles.addEventListener('click', (e) => {
+            e.stopPropagation();
             inputUploadFiles.click();
+        });
+    }
+
+    if (btnBrowseFolder && inputUploadFolder) {
+        btnBrowseFolder.addEventListener('click', (e) => {
+            e.stopPropagation();
+            inputUploadFolder.click();
+        });
+    }
+
+    if (uploadDropzone) {
+        uploadDropzone.addEventListener('click', (e) => {
+            if (e.target && e.target.id === 'btnBrowseFolder') return;
+            if (inputUploadFiles) inputUploadFiles.click();
         });
 
         uploadDropzone.addEventListener('dragover', (e) => {
@@ -1365,19 +1599,39 @@ function setupDialogActions() {
             uploadDropzone.classList.remove('drag-active');
         });
 
-        uploadDropzone.addEventListener('drop', (e) => {
+        uploadDropzone.addEventListener('drop', async (e) => {
             e.preventDefault();
             e.stopPropagation();
             uploadDropzone.classList.remove('drag-active');
-            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                stagedFiles = Array.from(e.dataTransfer.files);
+            if (e.dataTransfer) {
+                if (uploadFilesSummary) uploadFilesSummary.textContent = 'Scanning dropped items...';
+                const res = await extractDataTransferItems(e.dataTransfer);
+                stagedFiles = res.files;
+                stagedEmptyDirs = res.emptyDirs;
                 updateStagedFilesSummary();
             }
         });
+    }
 
+    if (inputUploadFiles) {
         inputUploadFiles.addEventListener('change', () => {
             if (inputUploadFiles.files && inputUploadFiles.files.length > 0) {
                 stagedFiles = Array.from(inputUploadFiles.files);
+                stagedEmptyDirs = [];
+                updateStagedFilesSummary();
+            }
+        });
+    }
+
+    if (inputUploadFolder) {
+        inputUploadFolder.addEventListener('change', () => {
+            if (inputUploadFolder.files && inputUploadFolder.files.length > 0) {
+                stagedFiles = Array.from(inputUploadFolder.files).map(f => {
+                    const rel = f.webkitRelativePath || f.name;
+                    Object.defineProperty(f, 'relativePath', { value: rel, writable: true, configurable: true });
+                    return f;
+                });
+                stagedEmptyDirs = [];
                 updateStagedFilesSummary();
             }
         });
@@ -1393,8 +1647,8 @@ function setupDialogActions() {
     if (btnConfirmUpload) {
         btnConfirmUpload.addEventListener('click', async () => {
             const files = stagedFiles.length > 0 ? stagedFiles : (inputUploadFiles ? Array.from(inputUploadFiles.files || []) : []);
-            if (!files || files.length === 0) {
-                UI.showToast('Upload Warning', 'Please select or drop at least one file to upload', 'warning');
+            if ((!files || files.length === 0) && stagedEmptyDirs.length === 0) {
+                UI.showToast('Upload Warning', 'Please select or drop files or folders to upload', 'warning');
                 return;
             }
 
@@ -1405,7 +1659,7 @@ function setupDialogActions() {
             if (uploadPercentText) uploadPercentText.textContent = '0%';
 
             try {
-                await Api.uploadFiles(State.currentPath, files, (pct) => {
+                await uploadRecursivePayload(State.currentPath, files, stagedEmptyDirs, (pct) => {
                     if (uploadProgressBar) {
                         uploadProgressBar.style.width = `${pct}%`;
                         uploadProgressBar.setAttribute('aria-valuenow', `${pct}`);
@@ -1708,11 +1962,13 @@ function startLivePolling() {
                 const isEditorOpen = !document.getElementById('contentEditorView')?.classList.contains('d-none');
                 const isVideoOpen = !document.getElementById('contentVideoView')?.classList.contains('d-none');
                 const isImageOpen = !document.getElementById('contentImageView')?.classList.contains('d-none');
+                const isPdfOpen = !document.getElementById('contentPdfView')?.classList.contains('d-none');
+                const isAudioVisOpen = !document.getElementById('contentAudioVisualizer')?.classList.contains('d-none');
                 const isSettingsOpen = !document.getElementById('contentSettingsView')?.classList.contains('d-none');
                 const isModalOpen = !!document.querySelector('.modal.show');
                 const isRenaming = !!(activeRenameDismiss || document.querySelector('.inline-rename-input'));
 
-                if (isEditorOpen || isVideoOpen || isImageOpen || isSettingsOpen || isModalOpen || isRenaming) {
+                if (isEditorOpen || isVideoOpen || isImageOpen || isPdfOpen || isAudioVisOpen || isSettingsOpen || isModalOpen || isRenaming || State.selectedPaths.size > 0) {
                     return;
                 }
                 State.signature = res.signature;

@@ -306,9 +306,14 @@ export const Editor = {
         if (pathEl) pathEl.textContent = `/${path}`;
 
         const imageView = document.getElementById('contentImageView');
+        const pdfView = document.getElementById('contentPdfView');
         if (imageView) {
             imageView.classList.add('d-none');
             imageView.classList.remove('d-flex');
+        }
+        if (pdfView) {
+            pdfView.classList.add('d-none');
+            pdfView.classList.remove('d-flex');
         }
         if (workspaceView) workspaceView.classList.add('d-none');
         if (toolbar) toolbar.classList.add('d-none');
