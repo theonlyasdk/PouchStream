@@ -52,10 +52,11 @@ public class ServerService extends Service {
         void onServerStateChanged(boolean running, String url, String error);
     }
 
-    private static ServerListener listener;
-    private static boolean running = false;
-    private static String serverUrl = "";
-    private static String lastError = null;
+    private static final Object STATE_LOCK = new Object();
+    private static volatile ServerListener listener;
+    private static volatile boolean running = false;
+    private static volatile String serverUrl = "";
+    private static volatile String lastError = null;
 
     private PouchServer server;
     private StorageHelper storage;
@@ -66,17 +67,41 @@ public class ServerService extends Service {
     private WifiManager.WifiLock wifiLock;
 
     public static void setListener(ServerListener l) {
-        listener = l;
+        synchronized (STATE_LOCK) {
+            listener = l;
+        }
         // Do not immediately callback - let MainActivity onResume handle initial sync with correct animate flag
         // Previously this caused duplicate onServerStateChanged that cancelled hide animation (button vs notification)
     }
 
     public static boolean isRunning() {
-        return running;
+        synchronized (STATE_LOCK) {
+            return running;
+        }
     }
 
     public static String getServerUrl() {
-        return serverUrl;
+        synchronized (STATE_LOCK) {
+            return serverUrl;
+        }
+    }
+
+    private static void setState(boolean isRunning, String url, String error) {
+        synchronized (STATE_LOCK) {
+            running = isRunning;
+            serverUrl = url != null ? url : "";
+            lastError = error;
+        }
+    }
+
+    private static void notifyListener(boolean isRunning, String url, String error) {
+        ServerListener copy;
+        synchronized (STATE_LOCK) {
+            copy = listener;
+        }
+        if (copy != null) {
+            copy.onServerStateChanged(isRunning, url, error);
+        }
     }
 
     @Override
@@ -111,7 +136,7 @@ public class ServerService extends Service {
     public void onTaskRemoved(Intent rootIntent) {
         // Keep service alive when user swipes away from recents
         // START_STICKY will handle restart, but on some OEMs we need explicit restart
-        if (running) {
+        if (isRunning()) {
             Intent restartIntent = new Intent(getApplicationContext(), ServerService.class);
             restartIntent.setAction(ACTION_START);
             // Use stored prefs values for port/uri
@@ -199,13 +224,10 @@ public class ServerService extends Service {
 
         Uri folderUri = uriStr != null ? Uri.parse(uriStr) : null;
         if (folderUri == null) {
-            lastError = "No folder selected";
-            running = false;
-            serverUrl = "";
+            String err = "No folder selected";
+            setState(false, "", err);
             AppLogger.log("ServerService", "Cannot start server: no folder selected");
-            if (listener != null) {
-                listener.onServerStateChanged(false, "", lastError);
-            }
+            notifyListener(false, "", err);
             // Still show notification briefly? Better stop self
             stopSelf();
             return;
@@ -216,7 +238,7 @@ public class ServerService extends Service {
         stopServerSilently();
 
         String ip = NetworkUtils.getLocalIpAddress(this);
-        serverUrl = "http://" + ip + ":" + port;
+        synchronized (STATE_LOCK) { serverUrl = "http://" + ip + ":" + port; }
 
         AppLogger.log("ServerService", "Starting server on " + serverUrl + " (folder: " + storage.getRootName() + ")");
 
@@ -276,21 +298,20 @@ public class ServerService extends Service {
                 port = boundPort;
                 prefs.edit().putInt(KEY_PORT, port).apply();
                 String ip2 = NetworkUtils.getLocalIpAddress(this);
-                serverUrl = "http://" + ip2 + ":" + port;
+                synchronized (STATE_LOCK) { serverUrl = "http://" + ip2 + ":" + port; }
                 AppLogger.log("ServerService", "Port conflict: switched to " + port);
                 final int toastPort = port;
                 new Handler(Looper.getMainLooper()).post(() ->
                         Toast.makeText(getApplicationContext(), getString(R.string.toast_port_busy_switched, toastPort), Toast.LENGTH_LONG).show());
             }
-            running = true;
-            lastError = null;
+            setState(true, getServerUrl(), null);
 
             prefs.edit().putBoolean(KEY_WAS_RUNNING, true).apply();
 
             AppLogger.log("ServerService", "Server successfully bound to port " + port);
 
             // Update notification with final URL (in case IP resolved late or port fallback)
-            Notification updated = buildNotification(serverUrl, storage.getRootName());
+            Notification updated = buildNotification(getServerUrl(), storage.getRootName());
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 nm.notify(NOTIFICATION_ID, updated);
@@ -298,17 +319,12 @@ public class ServerService extends Service {
 
             registerNetworkCallback();
 
-            if (listener != null) {
-                listener.onServerStateChanged(true, serverUrl, null);
-            }
+            notifyListener(true, getServerUrl(), null);
         } else {
-            running = false;
-            serverUrl = "";
-            lastError = lastEx != null && lastEx.getMessage() != null ? lastEx.getMessage() : "Failed to start server";
-            AppLogger.log("ServerService", "Error starting server: " + lastError, lastEx);
-            if (listener != null) {
-                listener.onServerStateChanged(false, "", lastError);
-            }
+            String errMsg = lastEx != null && lastEx.getMessage() != null ? lastEx.getMessage() : "Failed to start server";
+            setState(false, "", errMsg);
+            AppLogger.log("ServerService", "Error starting server: " + errMsg, lastEx);
+            notifyListener(false, "", errMsg);
             prefs.edit().putBoolean(KEY_WAS_RUNNING, false).apply();
             releaseWakeLock();
             releaseWifiLock();
@@ -321,25 +337,24 @@ public class ServerService extends Service {
     }
 
     private final Runnable networkCheckRunnable = () -> {
-        if (!running || server == null) return;
+        if (!isRunning() || server == null) return;
         String newIp = NetworkUtils.getLocalIpAddress(ServerService.this);
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int currentPort = server.getListeningPort() > 0 ? server.getListeningPort() : prefs.getInt(KEY_PORT, 8080);
         String newUrl = "http://" + newIp + ":" + currentPort;
-        if (!newUrl.equals(serverUrl)) {
-            AppLogger.log("ServerService", "Network change detected: " + serverUrl + " -> " + newUrl);
-            serverUrl = newUrl;
+        String curUrl = getServerUrl();
+        if (!newUrl.equals(curUrl)) {
+            AppLogger.log("ServerService", "Network change detected: " + curUrl + " -> " + newUrl);
+            synchronized (STATE_LOCK) { serverUrl = newUrl; }
 
             String folderName = storage != null ? storage.getRootName() : prefs.getString(KEY_FOLDER_NAME, "Selected Folder");
-            Notification updated = buildNotification(serverUrl, folderName);
+            Notification updated = buildNotification(newUrl, folderName);
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 nm.notify(NOTIFICATION_ID, updated);
             }
 
-            if (listener != null) {
-                listener.onServerStateChanged(true, serverUrl, null);
-            }
+            notifyListener(true, newUrl, null);
         }
     };
 
@@ -411,23 +426,21 @@ public class ServerService extends Service {
 
     private void stopServer() {
         // Idempotent - avoid duplicate onServerStateChanged that cancels hide animation (e.g., onStartCommand ACTION_STOP + onDestroy)
-        if (!running && server == null && serverUrl.isEmpty()) {
+        if (!isRunning() && server == null && getServerUrl().isEmpty()) {
             unregisterNetworkCallback();
             return;
         }
-        boolean wasRunning = running;
+        boolean wasRunning = isRunning();
         unregisterNetworkCallback();
         stopServerSilently();
-        running = false;
-        serverUrl = "";
+        setState(false, "", null);
         AppLogger.log("ServerService", "Server stopped");
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_WAS_RUNNING, false).apply();
-        if (wasRunning && listener != null) {
-            listener.onServerStateChanged(false, "", null);
-        } else if (!wasRunning && listener != null) {
-            // Ensure UI is in stopped state without re-triggering animated hide (would cancel running hide transition)
-            // Only notify if listener was not yet notified for this stop
-            // For already-stopped case, still ensure UI consistency via non-animated path in Activity onResume
+        if (wasRunning) {
+            notifyListener(false, "", null);
+        } else {
+            // Already stopped – ensure UI is in stopped state without re-triggering animated hide
+            // UI consistency is handled via non-animated path in Activity onResume
         }
         releaseWakeLock();
         releaseWifiLock();

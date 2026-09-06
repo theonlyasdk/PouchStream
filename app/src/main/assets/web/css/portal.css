@@ -1782,14 +1782,14 @@ video::cue {
     display: flex !important;
     flex: 1 1 0px !important;
     min-height: 0 !important;
-    animation: visualizerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: visualizerSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 #contentAudioVisualizer.closing {
     display: flex !important;
     flex: 1 1 0px !important;
     min-height: 0 !important;
-    animation: visualizerSlideOut 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+    animation: visualizerSlideOut 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 #contentAudioVisualizer.d-none {
@@ -1799,7 +1799,7 @@ video::cue {
 @keyframes visualizerSlideIn {
     0% {
         transform: translateY(100%);
-        opacity: 0.2;
+        opacity: 0.15;
     }
     100% {
         transform: translateY(0);
@@ -1819,13 +1819,7 @@ video::cue {
 }
 .audio-visualizer-canvas {
     background: #000000 !important;
-    border: 1px solid #495057 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-}
-.audio-cover-large {
-    background: #1a1a1a !important;
-    border: 1px solid #495057 !important;
+    border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
 }

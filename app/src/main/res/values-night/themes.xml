@@ -8,7 +8,7 @@
         <item name="colorSecondaryVariant">@color/brand_primary_dark</item>
         <item name="colorOnSecondary">@color/white</item>
         <item name="colorControlActivated">@color/brand_primary</item>
-        <item name="colorControlHighlight">@color/brand_primary_container</item>
+        <item name="colorControlHighlight">@color/brand_ripple</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.PouchStream.MaterialAlertDialog</item>
         <item name="alertDialogTheme">@style/ThemeOverlay.PouchStream.AlertDialog</item>
     </style>

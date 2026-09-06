@@ -4,8 +4,9 @@
     <color name="white">#FFFFFFFF</color>
     <color name="status_running">#2E7D32</color>
     <color name="status_stopped">#C62828</color>
-    <color name="brand_primary">#1E88E5</color>
-    <color name="brand_primary_dark">#1565C0</color>
+    <color name="brand_primary">#2196F3</color>
+    <color name="brand_primary_dark">#1976D2</color>
     <color name="brand_primary_container">#BBDEFB</color>
+    <color name="brand_ripple">#1F2196F3</color>
     <color name="brand_on_primary">#FFFFFF</color>
 </resources>

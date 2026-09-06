@@ -552,41 +552,87 @@ public class PouchServer extends NanoHTTPD {
         try {
             if (rangeHeader != null && rangeHeader.startsWith("bytes=") && fileLen > 0) {
                 String rangeValue = rangeHeader.substring("bytes=".length()).trim();
-                long start = 0;
-                long end = fileLen - 1;
-
-                int dashIdx = rangeValue.indexOf('-');
-                if (dashIdx != -1) {
-                    String startStr = rangeValue.substring(0, dashIdx).trim();
-                    String endStr = rangeValue.substring(dashIdx + 1).trim();
-
-                    if (startStr.isEmpty()) {
-                        // Suffix-byte-range: bytes=-500 (request last 500 bytes per RFC 7233)
-                        if (!endStr.isEmpty()) {
-                            try {
-                                long suffixLength = Long.parseLong(endStr);
-                                start = Math.max(0, fileLen - suffixLength);
-                                end = fileLen - 1;
-                            } catch (NumberFormatException ignored) {}
-                        }
-                    } else {
-                        try {
-                            start = Long.parseLong(startStr);
-                        } catch (NumberFormatException ignored) {}
-                        if (!endStr.isEmpty()) {
-                            try {
-                                end = Long.parseLong(endStr);
-                            } catch (NumberFormatException ignored) {}
-                        }
-                    }
-                }
-
-                if (start > end || start >= fileLen) {
+                // Reject multiple ranges (comma) – only single range supported per RFC 7233
+                if (rangeValue.contains(",")) {
                     pfd.close();
                     Response res = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
                     res.addHeader("Content-Range", "bytes */" + fileLen);
                     return res;
                 }
+                long start = 0;
+                long end = fileLen - 1;
+                boolean rangeValid = false;
+                boolean rangeParsed = false;
+
+                int dashIdx = rangeValue.indexOf('-');
+                if (dashIdx != -1 && rangeValue.indexOf('-', dashIdx + 1) == -1) {
+                    String startStr = rangeValue.substring(0, dashIdx).trim();
+                    String endStr = rangeValue.substring(dashIdx + 1).trim();
+
+                    if (startStr.isEmpty() && !endStr.isEmpty()) {
+                        // Suffix-byte-range: bytes=-500 (request last 500 bytes per RFC 7233)
+                        if (endStr.matches("\\d+")) {
+                            try {
+                                long suffixLength = Long.parseLong(endStr);
+                                if (suffixLength > 0) {
+                                    start = Math.max(0, fileLen - suffixLength);
+                                    end = fileLen - 1;
+                                    rangeParsed = true;
+                                    rangeValid = true;
+                                } else {
+                                    rangeParsed = true;
+                                    rangeValid = false;
+                                }
+                            } catch (NumberFormatException e) {
+                                rangeParsed = true;
+                                rangeValid = false;
+                            }
+                        } else {
+                            rangeParsed = true;
+                            rangeValid = false;
+                        }
+                    } else if (!startStr.isEmpty()) {
+                        if (startStr.matches("\\d+") && (endStr.isEmpty() || endStr.matches("\\d+"))) {
+                            try {
+                                start = Long.parseLong(startStr);
+                                if (!endStr.isEmpty()) {
+                                    end = Long.parseLong(endStr);
+                                }
+                                rangeParsed = true;
+                                rangeValid = start >= 0 && end >= 0;
+                            } catch (NumberFormatException e) {
+                                rangeParsed = true;
+                                rangeValid = false;
+                            }
+                        } else {
+                            rangeParsed = true;
+                            rangeValid = false;
+                        }
+                    } else {
+                        // Both empty: bytes=- is invalid
+                        rangeParsed = true;
+                        rangeValid = false;
+                    }
+                } else {
+                    // No dash or multiple dashes -> invalid
+                    rangeParsed = true;
+                    rangeValid = false;
+                }
+
+                if (rangeParsed && !rangeValid) {
+                    pfd.close();
+                    Response res = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
+                    res.addHeader("Content-Range", "bytes */" + fileLen);
+                    return res;
+                }
+                // Only enforce range check if we actually parsed a range
+                if (rangeParsed && (start > end || start >= fileLen)) {
+                    pfd.close();
+                    Response res = newFixedLengthResponse(Response.Status.RANGE_NOT_SATISFIABLE, MIME_PLAINTEXT, "");
+                    res.addHeader("Content-Range", "bytes */" + fileLen);
+                    return res;
+                }
+                // If no valid range parsed, fall through to full content (ignore malformed header)
 
                 end = Math.min(end, fileLen - 1);
                 long contentLength = end - start + 1;

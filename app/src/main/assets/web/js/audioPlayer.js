@@ -14,7 +14,7 @@ export const AudioPlayer = {
     isSeeking: false,
     lastNonZeroVolume: 1,
 
-    // Visualizer state
+    // Visualizer state & configurable parameters
     visualizerCanvas: null,
     visualizerCtx: null,
     audioContext: null,
@@ -24,6 +24,11 @@ export const AudioPlayer = {
     isVisualizerOpen: false,
     openVisTimeout: null,
     closeVisTimeout: null,
+    visBarCount: 90, // 45, 64, 90, 128, 180
+    visConjoined: false,
+    visBarType: 'mirrored', // 'mirrored', 'bottom', 'top_down', 'line'
+    visColor: 'white', // 'white', 'purple', 'blue', 'rainbow', 'gradient_fire', 'green'
+    visSpeed: 'normal', // 'smooth', 'normal', 'fast', 'ultra'
 
     init() {
         this.audio = document.getElementById('audioPlayerElement');
@@ -101,14 +106,14 @@ export const AudioPlayer = {
         if (btnClose) {
             btnClose.addEventListener('click', () => this.stop());
         }
-        // Click on icon / track info opens full visualizer (SoundCloud inspo)
+        // Click on icon / track info toggles visualizer (opens or dismisses)
         if (iconBox) {
-            iconBox.addEventListener('click', () => this.openVisualizer());
+            iconBox.addEventListener('click', () => this.toggleVisualizer());
         }
         if (trackInfoClickable) {
-            trackInfoClickable.addEventListener('click', () => this.openVisualizer());
+            trackInfoClickable.addEventListener('click', () => this.toggleVisualizer());
         }
-        // Visualizer controls
+        // Visualizer controls & Options menu
         this.initVisualizerControls();
 
         if (volumeSlider) {
@@ -262,13 +267,9 @@ export const AudioPlayer = {
             dlBtn.download = this.currentName;
         }
         // Sync visualizer header if open
-        const visTitle = document.getElementById('audioVisualizerTrackTitle');
-        const visSub = document.getElementById('audioVisualizerTrackSub');
-        const visTitle2 = document.getElementById('audioVisualizerTitle');
+        const visTitle = document.getElementById('audioVisualizerTitle');
         const visDl = document.getElementById('btnAudioVisualizerDownload');
         if (visTitle) visTitle.textContent = this.currentName;
-        if (visSub) visSub.textContent = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : 'Root Directory';
-        if (visTitle2) visTitle2.textContent = this.currentName;
         if (visDl) {
             visDl.href = `/api/stream?path=${encodeURIComponent(path)}&download=true`;
             visDl.download = this.currentName;
@@ -486,21 +487,212 @@ export const AudioPlayer = {
         return `${m}:${s < 10 ? '0' : ''}${s}`;
     },
 
+    toggleVisualizer() {
+        if (this.isVisualizerOpen) {
+            this.closeVisualizer();
+        } else {
+            this.openVisualizer();
+        }
+    },
+
     initVisualizerControls() {
         const btnCloseVis = document.getElementById('btnCloseAudioVisualizer');
         if (btnCloseVis) btnCloseVis.addEventListener('click', () => this.closeVisualizer());
+        
         // Close visualizer on Esc
         window.addEventListener('keydown', (e) => {
             if (this.isVisualizerOpen && e.key === 'Escape') {
                 this.closeVisualizer();
             }
         });
+        
         // Responsive canvas resize
         window.addEventListener('resize', () => {
             if (this.isVisualizerOpen) {
                 this.resizeVisualizerCanvas();
             }
         });
+
+        // Load saved visualizer preferences
+        try {
+            const savedCount = parseInt(localStorage.getItem('player.audio.vis:barCount'), 10);
+            if (!isNaN(savedCount) && [45, 64, 90, 128, 180].includes(savedCount)) {
+                this.visBarCount = savedCount;
+            }
+            const savedConjoined = localStorage.getItem('player.audio.vis:conjoined');
+            if (savedConjoined !== null) {
+                this.visConjoined = savedConjoined === 'true';
+            }
+            const savedType = localStorage.getItem('player.audio.vis:barType');
+            if (savedType && ['mirrored', 'bottom', 'top_down', 'line'].includes(savedType)) {
+                this.visBarType = savedType;
+            }
+            const savedColor = localStorage.getItem('player.audio.vis:color');
+            if (savedColor && ['white', 'purple', 'blue', 'rainbow', 'gradient_fire', 'green'].includes(savedColor)) {
+                this.visColor = savedColor;
+            }
+            const savedSpeed = localStorage.getItem('player.audio.vis:speed');
+            if (savedSpeed && ['smooth', 'normal', 'fast', 'ultra'].includes(savedSpeed)) {
+                this.visSpeed = savedSpeed;
+            }
+        } catch (_) {}
+
+        // 1. Bar Count / Width Controls
+        const selectBarCount = document.getElementById('selectVisBarCount');
+        const lblBarWidth = document.getElementById('lblVisBarWidth');
+        const barCounts = [45, 64, 90, 128, 180];
+        const barLabels = { 45: 'Wide (45)', 64: 'Medium (64)', 90: 'Normal (90)', 128: 'Dense (128)', 180: 'Ultra Dense (180)' };
+
+        const updateBarCountUI = (count) => {
+            this.visBarCount = count;
+            if (selectBarCount) selectBarCount.value = count.toString();
+            if (lblBarWidth) lblBarWidth.textContent = barLabels[count] || `${count} bars`;
+            try { localStorage.setItem('player.audio.vis:barCount', count.toString()); } catch (_) {}
+        };
+
+        if (selectBarCount) {
+            selectBarCount.value = this.visBarCount.toString();
+            if (lblBarWidth) lblBarWidth.textContent = barLabels[this.visBarCount] || `${this.visBarCount} bars`;
+            selectBarCount.addEventListener('change', (e) => {
+                updateBarCountUI(parseInt(e.target.value, 10));
+            });
+        }
+
+        const btnDecWidth = document.getElementById('btnVisWidthDec');
+        if (btnDecWidth) {
+            btnDecWidth.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = barCounts.indexOf(this.visBarCount);
+                if (idx > 0) updateBarCountUI(barCounts[idx - 1]);
+            });
+        }
+
+        const btnIncWidth = document.getElementById('btnVisWidthInc');
+        if (btnIncWidth) {
+            btnIncWidth.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = barCounts.indexOf(this.visBarCount);
+                if (idx !== -1 && idx < barCounts.length - 1) updateBarCountUI(barCounts[idx + 1]);
+            });
+        }
+
+        // 2. Conjoined Bars Switch
+        const switchConjoined = document.getElementById('switchVisConjoined');
+        if (switchConjoined) {
+            switchConjoined.checked = this.visConjoined;
+            switchConjoined.addEventListener('change', (e) => {
+                this.visConjoined = e.target.checked;
+                try { localStorage.setItem('player.audio.vis:conjoined', this.visConjoined ? 'true' : 'false'); } catch (_) {}
+            });
+        }
+
+        // 3. Bar Type (Waveform mode)
+        const selectBarType = document.getElementById('selectVisBarType');
+        const barTypes = ['mirrored', 'bottom', 'top_down', 'line'];
+        const updateBarTypeUI = (type) => {
+            if (!barTypes.includes(type)) return;
+            this.visBarType = type;
+            if (selectBarType) selectBarType.value = type;
+            try { localStorage.setItem('player.audio.vis:barType', type); } catch (_) {}
+        };
+
+        if (selectBarType) {
+            selectBarType.value = this.visBarType;
+            selectBarType.addEventListener('change', (e) => updateBarTypeUI(e.target.value));
+        }
+
+        const btnPrevType = document.getElementById('btnPrevVisType');
+        if (btnPrevType) {
+            btnPrevType.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = barTypes.indexOf(this.visBarType);
+                const nextIdx = (idx - 1 + barTypes.length) % barTypes.length;
+                updateBarTypeUI(barTypes[nextIdx]);
+            });
+        }
+
+        const btnNextType = document.getElementById('btnNextVisType');
+        if (btnNextType) {
+            btnNextType.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = barTypes.indexOf(this.visBarType);
+                const nextIdx = (idx + 1) % barTypes.length;
+                updateBarTypeUI(barTypes[nextIdx]);
+            });
+        }
+
+        // 4. Color Palette
+        const selectColor = document.getElementById('selectVisColor');
+        const colorList = ['white', 'purple', 'blue', 'rainbow', 'gradient_fire', 'green'];
+        const updateColorUI = (col) => {
+            if (!colorList.includes(col)) return;
+            this.visColor = col;
+            if (selectColor) selectColor.value = col;
+            try { localStorage.setItem('player.audio.vis:color', col); } catch (_) {}
+        };
+
+        if (selectColor) {
+            selectColor.value = this.visColor;
+            selectColor.addEventListener('change', (e) => updateColorUI(e.target.value));
+        }
+
+        const btnPrevColor = document.getElementById('btnPrevVisColor');
+        if (btnPrevColor) {
+            btnPrevColor.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = colorList.indexOf(this.visColor);
+                const nextIdx = (idx - 1 + colorList.length) % colorList.length;
+                updateColorUI(colorList[nextIdx]);
+            });
+        }
+
+        const btnNextColor = document.getElementById('btnNextVisColor');
+        if (btnNextColor) {
+            btnNextColor.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const idx = colorList.indexOf(this.visColor);
+                const nextIdx = (idx + 1) % colorList.length;
+                updateColorUI(colorList[nextIdx]);
+            });
+        }
+
+        // 5. Speed / Animation Parameters
+        const selectSpeed = document.getElementById('selectVisSpeed');
+        if (selectSpeed) {
+            selectSpeed.value = this.visSpeed;
+            selectSpeed.addEventListener('change', (e) => {
+                this.visSpeed = e.target.value;
+                if (this.analyser) {
+                    this.applyAnalyserSmoothing();
+                }
+                try { localStorage.setItem('player.audio.vis:speed', this.visSpeed); } catch (_) {}
+            });
+        }
+    },
+
+    applyAnalyserSmoothing() {
+        if (!this.analyser) return;
+        switch (this.visSpeed) {
+            case 'smooth':
+                this.analyser.smoothingTimeConstant = 0.88;
+                break;
+            case 'fast':
+                this.analyser.smoothingTimeConstant = 0.55;
+                break;
+            case 'ultra':
+                this.analyser.smoothingTimeConstant = 0.2;
+                break;
+            case 'normal':
+            default:
+                this.analyser.smoothingTimeConstant = 0.78;
+                break;
+        }
     },
 
     openVisualizer() {
@@ -524,13 +716,10 @@ export const AudioPlayer = {
         view.classList.add('show');
         this.isVisualizerOpen = true;
 
-        // Sync titles
-        const t = document.getElementById('audioVisualizerTrackTitle');
-        const s = document.getElementById('audioVisualizerTrackSub');
+        // Sync visualizer title
         const t2 = document.getElementById('audioVisualizerTitle');
-        if (t) t.textContent = this.currentName || 'Track';
-        if (s) s.textContent = this.currentPath ? (this.currentPath.includes('/') ? this.currentPath.substring(0, this.currentPath.lastIndexOf('/')) : 'Root') : '';
         if (t2) t2.textContent = this.currentName || 'Audio Visualizer';
+        
         this.updatePlayState(!this.audio.paused);
         this.updateProgress();
         this.ensureVisualizerAudioContext();
@@ -574,7 +763,7 @@ export const AudioPlayer = {
             if (workspace) workspace.classList.remove('d-none');
             if (toolbar) toolbar.classList.remove('d-none');
             this.closeVisTimeout = null;
-        }, 220);
+        }, 200);
     },
 
     resizeVisualizerCanvas() {
@@ -598,13 +787,38 @@ export const AudioPlayer = {
             if (!AudioCtx) return;
             this.audioContext = new AudioCtx();
             this.analyser = this.audioContext.createAnalyser();
-            this.analyser.fftSize = 256;
-            this.analyser.smoothingTimeConstant = 0.8;
+            this.analyser.fftSize = 512;
+            this.applyAnalyserSmoothing();
             this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
             this.sourceNode.connect(this.analyser);
             this.analyser.connect(this.audioContext.destination);
         } catch (e) {
             console.warn('Visualizer AudioContext failed:', e);
+        }
+    },
+
+    getBarColor(ctx, index, total, height, value) {
+        switch (this.visColor) {
+            case 'purple':
+                return '#a855f7';
+            case 'blue':
+                return '#3b82f6';
+            case 'green':
+                return '#10b981';
+            case 'gradient_fire': {
+                const grad = ctx.createLinearGradient(0, height, 0, 0);
+                grad.addColorStop(0, '#f97316');
+                grad.addColorStop(0.6, '#ef4444');
+                grad.addColorStop(1, '#fbbf24');
+                return grad;
+            }
+            case 'rainbow': {
+                const hue = Math.floor((index / total) * 320);
+                return `hsl(${hue}, 85%, 65%)`;
+            }
+            case 'white':
+            default:
+                return '#e5e7eb';
         }
     },
 
@@ -622,30 +836,69 @@ export const AudioPlayer = {
         const analyser = this.analyser;
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
+        
         const draw = () => {
             if (!this.isVisualizerOpen) return;
             this.visualizerAnimId = requestAnimationFrame(draw);
             analyser.getByteFrequencyData(dataArray);
+            
             const width = canvas.width;
             const height = canvas.height;
+            if (!width || !height) return;
+
             // Flush minimalistic background
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, width, height);
-            // Flush waveform bars - flat, no gradient, no rounding
-            const barCount = 90;
-            const step = Math.floor(bufferLength / barCount);
-            const barWidth = (width / barCount) * 0.7;
-            const gap = (width / barCount) * 0.3;
+
+            const barCount = this.visBarCount || 90;
+            const step = Math.max(1, Math.floor(bufferLength / barCount));
+            const barWidth = this.visConjoined ? (width / barCount) : ((width / barCount) * 0.72);
+            const gap = this.visConjoined ? 0 : ((width / barCount) * 0.28);
+            const type = this.visBarType || 'mirrored';
+
+            if (type === 'line') {
+                ctx.beginPath();
+                ctx.lineWidth = Math.max(2, Math.floor(width / barCount));
+                ctx.strokeStyle = this.getBarColor(ctx, 0, barCount, height, 200);
+                let x = 0;
+                for (let i = 0; i < barCount; i++) {
+                    const idx = i * step;
+                    let value = dataArray[idx] || 0;
+                    if (this.audio.paused) {
+                        value = value * 0.15 + 8 + Math.sin(Date.now() * 0.001 + i) * 4;
+                    }
+                    const barHeight = Math.max(4, (value / 255) * height * 0.85);
+                    const y = (height - barHeight) / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += barWidth + gap;
+                }
+                ctx.stroke();
+                return;
+            }
+
             let x = 0;
             for (let i = 0; i < barCount; i++) {
                 const idx = i * step;
                 let value = dataArray[idx] || 0;
-                if (this.audio.paused) value = value * 0.15 + 8 + Math.sin(Date.now() * 0.001 + i) * 4;
+                if (this.audio.paused) {
+                    value = value * 0.15 + 8 + Math.sin(Date.now() * 0.001 + i) * 4;
+                }
                 const barHeight = Math.max(4, (value / 255) * height * 0.85);
-                const y = (height - barHeight) / 2;
-                // Flat flush color - no gradient, no alpha by progress (single seekbar is HTML)
-                ctx.fillStyle = '#e5e7eb';
-                ctx.fillRect(x, y, barWidth, barHeight);
+                ctx.fillStyle = this.getBarColor(ctx, i, barCount, height, value);
+
+                if (type === 'bottom') {
+                    // Standard bottom-up bars
+                    const y = height - barHeight;
+                    ctx.fillRect(x, y, barWidth, barHeight);
+                } else if (type === 'top_down') {
+                    // Top-down bars
+                    ctx.fillRect(x, 0, barWidth, barHeight);
+                } else {
+                    // Mirrored (center out)
+                    const y = (height - barHeight) / 2;
+                    ctx.fillRect(x, y, barWidth, barHeight);
+                }
                 x += barWidth + gap;
             }
         };
@@ -656,24 +909,56 @@ export const AudioPlayer = {
         if (!this.visualizerCtx || !this.visualizerCanvas) return;
         const canvas = this.visualizerCanvas;
         const ctx = this.visualizerCtx;
-        const width = canvas.width;
-        const height = canvas.height;
+        
         const draw = () => {
             if (!this.isVisualizerOpen) return;
             this.visualizerAnimId = requestAnimationFrame(draw);
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            if (!width || !height) return;
+
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, width, height);
-            const barCount = 90;
-            const barWidth = (width / barCount) * 0.7;
-            const gap = (width / barCount) * 0.3;
+
+            const barCount = this.visBarCount || 90;
+            const barWidth = this.visConjoined ? (width / barCount) : ((width / barCount) * 0.72);
+            const gap = this.visConjoined ? 0 : ((width / barCount) * 0.28);
+            const type = this.visBarType || 'mirrored';
+            const time = Date.now() * (this.visSpeed === 'fast' ? 0.0035 : this.visSpeed === 'ultra' ? 0.005 : this.visSpeed === 'smooth' ? 0.0012 : 0.002);
+
+            if (type === 'line') {
+                ctx.beginPath();
+                ctx.lineWidth = Math.max(2, Math.floor(width / barCount));
+                ctx.strokeStyle = this.getBarColor(ctx, 0, barCount, height, 200);
+                let x = 0;
+                for (let i = 0; i < barCount; i++) {
+                    const base = 20 + Math.sin(i * 0.3 + time) * 15 + Math.sin(i * 0.7 - time * 0.5) * 10;
+                    const barHeight = this.audio && !this.audio.paused ? Math.max(6, base + Math.sin(i * 0.5 + time * 2) * 20) : Math.max(4, 12 + Math.sin(i * 0.4 + time * 0.5) * 6);
+                    const y = (height - barHeight) / 2;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                    x += barWidth + gap;
+                }
+                ctx.stroke();
+                return;
+            }
+
             let x = 0;
-            const time = Date.now() * 0.002;
             for (let i = 0; i < barCount; i++) {
                 const base = 20 + Math.sin(i * 0.3 + time) * 15 + Math.sin(i * 0.7 - time * 0.5) * 10;
                 const barHeight = this.audio && !this.audio.paused ? Math.max(6, base + Math.sin(i * 0.5 + time * 2) * 20) : Math.max(4, 12 + Math.sin(i * 0.4 + time * 0.5) * 6);
-                const y = (height - barHeight) / 2;
-                ctx.fillStyle = '#e5e7eb';
-                ctx.fillRect(x, y, barWidth, barHeight);
+                ctx.fillStyle = this.getBarColor(ctx, i, barCount, height, barHeight);
+
+                if (type === 'bottom') {
+                    const y = height - barHeight;
+                    ctx.fillRect(x, y, barWidth, barHeight);
+                } else if (type === 'top_down') {
+                    ctx.fillRect(x, 0, barWidth, barHeight);
+                } else {
+                    const y = (height - barHeight) / 2;
+                    ctx.fillRect(x, y, barWidth, barHeight);
+                }
                 x += barWidth + gap;
             }
         };
