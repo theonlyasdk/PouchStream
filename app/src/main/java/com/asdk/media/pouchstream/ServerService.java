@@ -280,7 +280,7 @@ public class ServerService extends Service {
                 AppLogger.log("ServerService", "Port conflict: switched to " + port);
                 final int toastPort = port;
                 new Handler(Looper.getMainLooper()).post(() ->
-                        Toast.makeText(getApplicationContext(), "Port busy, switched to " + toastPort, Toast.LENGTH_LONG).show());
+                        Toast.makeText(getApplicationContext(), getString(R.string.toast_port_busy_switched, toastPort), Toast.LENGTH_LONG).show());
             }
             running = true;
             lastError = null;
@@ -465,7 +465,7 @@ public class ServerService extends Service {
         }
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Server is running")
+                .setContentTitle(getString(R.string.notification_title_running))
                 .setContentText(url)
                 .setSubText(folderName)
                 .setSmallIcon(R.mipmap.ic_launcher)
@@ -482,10 +482,10 @@ public class ServerService extends Service {
         // Add actions - order: Open Browser, Stop
         if (openBrowserPendingIntent != null) {
             builder.addAction(new NotificationCompat.Action(
-                    android.R.drawable.ic_menu_view, "Open Browser", openBrowserPendingIntent));
+                    android.R.drawable.ic_menu_view, getString(R.string.notification_action_open_browser), openBrowserPendingIntent));
         }
         builder.addAction(new NotificationCompat.Action(
-                android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPendingIntent));
+                android.R.drawable.ic_menu_close_clear_cancel, getString(R.string.notification_action_stop), stopPendingIntent));
 
         // BigText style for full URL visibility (folder already shown in SubText header)
         builder.setStyle(new NotificationCompat.BigTextStyle()
@@ -498,10 +498,10 @@ public class ServerService extends Service {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
-                    "PouchStream Background Server",
+                    getString(R.string.notification_channel_name),
                     NotificationManager.IMPORTANCE_LOW
             );
-            channel.setDescription("Shows active web streaming and file server status. Keeps server alive in background.");
+            channel.setDescription(getString(R.string.notification_channel_desc));
             channel.setShowBadge(false);
             channel.enableLights(false);
             channel.enableVibration(false);

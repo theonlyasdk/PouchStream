@@ -10,7 +10,7 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        app:title="Server Logs"
+        app:title="@string/server_logs"
         app:navigationIcon="?attr/homeAsUpIndicator" />
 
     <ScrollView
@@ -29,7 +29,7 @@
             android:textSize="12sp"
             android:textColor="#ECEFF1"
             android:textIsSelectable="true"
-            android:text="No logs recorded yet." />
+            android:text="@string/no_logs_recorded" />
     </ScrollView>
 
 </LinearLayout>

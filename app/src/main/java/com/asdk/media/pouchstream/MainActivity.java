@@ -80,7 +80,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             new ActivityResultContracts.RequestPermission(),
             isGranted -> {
                 if (!isGranted) {
-                    Toast.makeText(this, "Notification permission recommended for background server", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_notification_permission_recommended), Toast.LENGTH_SHORT).show();
                 }
             }
     );
@@ -88,6 +88,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         ThemeHelper.applyFromPrefs(this);
+        ThemeHelper.applyDynamicColorsIfAvailable(this);
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
@@ -143,9 +144,9 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             String url = ServerService.getServerUrl();
             if (!TextUtils.isEmpty(url)) {
                 ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                ClipData clip = ClipData.newPlainText("PouchStream URL", url);
+                ClipData clip = ClipData.newPlainText(getString(R.string.clip_label_url), url);
                 clipboard.setPrimaryClip(clip);
-                Toast.makeText(this, "Copied URL to clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_copied_url), Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -166,7 +167,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             String fullPath = StorageHelper.getFullDisplayPath(this, selectedFolderUri);
             tvSelectedFolder.setText(fullPath);
         } else {
-            tvSelectedFolder.setText("No folder selected");
+            tvSelectedFolder.setText(getString(R.string.no_folder_selected));
         }
         updateStorageSummary();
         // Do not call updateUiState here - let caller decide animate flag (prevents duplicate that cancels hide animation)
@@ -183,7 +184,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                 if (totalBytes > 0) {
                     String freeStr = formatStorageBytes(freeBytes);
                     String totalStr = formatStorageBytes(totalBytes);
-                    tvStorageCapacity.setText(freeStr + " free of " + totalStr);
+                    tvStorageCapacity.setText(getString(R.string.storage_free_of, freeStr, totalStr));
                     tvStorageCapacity.setVisibility(View.VISIBLE);
                     return;
                 }
@@ -193,7 +194,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     }
 
     private String formatStorageBytes(long bytes) {
-        if (bytes <= 0) return "0 B";
+        if (bytes <= 0) return getString(R.string.bytes_zero);
         final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
         int digitGroups = (int) (Math.log10(bytes) / Math.log10(1024));
         digitGroups = Math.min(digitGroups, units.length - 1);
@@ -216,20 +217,20 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             tvSelectedFolder.setText(fullPath);
             updateStorageSummary();
             AppLogger.log("MainActivity", "Selected folder: " + fullPath);
-            Toast.makeText(this, "Folder selected: " + fullPath, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_folder_selected, fullPath), Toast.LENGTH_SHORT).show();
 
             if (ServerService.isRunning()) {
                 startServerService();
             }
         } catch (Exception e) {
             AppLogger.log("MainActivity", "Failed to persist folder permission: " + e.getMessage(), e);
-            Toast.makeText(this, "Failed to persist folder permission: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, getString(R.string.toast_failed_persist_permission, e.getMessage()), Toast.LENGTH_LONG).show();
         }
     }
 
     private void startServerService() {
         if (selectedFolderUri == null) {
-            Toast.makeText(this, "Please select a folder first!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_select_folder_first), Toast.LENGTH_SHORT).show();
             folderPickerLauncher.launch(null);
             return;
         }
@@ -245,7 +246,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
 
         // Disable controls while server is starting
         setControlsEnabled(false);
-        tvStatus.setText("Starting");
+        tvStatus.setText(getString(R.string.server_starting));
 
         int port = prefs.getInt(ServerService.KEY_PORT, 8080);
 
@@ -264,7 +265,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
     private void stopServerService() {
         // Disable controls while server is stopping
         setControlsEnabled(false);
-        tvStatus.setText("Stopping");
+        tvStatus.setText(getString(R.string.server_stopping));
 
         Intent serviceIntent = new Intent(this, ServerService.class);
         serviceIntent.setAction(ServerService.ACTION_STOP);
@@ -292,9 +293,9 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                 boolean alreadyPrompted = prefs.getBoolean("battery_opt_prompted", false);
                 if (!alreadyPrompted) {
                     new AlertDialog.Builder(this)
-                            .setTitle("Keep server running in background?")
-                            .setMessage("To prevent Android from killing PouchStream in background, please allow it to run without battery restrictions.\n\nTap \"Allow\" to open settings and choose \"Don't optimize\".")
-                            .setPositiveButton("Allow", (d, w) -> {
+                            .setTitle(getString(R.string.dialog_keep_running_title))
+                            .setMessage(getString(R.string.dialog_keep_running_message))
+                            .setPositiveButton(getString(R.string.allow), (d, w) -> {
                                 prefs.edit().putBoolean("battery_opt_prompted", true).apply();
                                 try {
                                     Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
@@ -306,7 +307,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                                     } catch (Exception ignored) {}
                                 }
                             })
-                            .setNegativeButton("Later", (d, w) -> prefs.edit().putBoolean("battery_opt_prompted", true).apply())
+                            .setNegativeButton(getString(R.string.later), (d, w) -> prefs.edit().putBoolean("battery_opt_prompted", true).apply())
                             .setCancelable(false)
                             .show();
                 }
@@ -343,20 +344,20 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         if (!ServerService.isRunning() || TextUtils.isEmpty(ServerService.getServerUrl())) {
             if (selectedFolderUri == null) {
                 new AlertDialog.Builder(this)
-                        .setTitle("Server Not Running")
-                        .setMessage("No folder is selected and server is stopped. Please choose a folder to start the server.")
-                        .setPositiveButton("Choose Folder", (d, w) -> folderPickerLauncher.launch(null))
-                        .setNegativeButton("Cancel", null)
+                        .setTitle(getString(R.string.dialog_server_not_running_title))
+                        .setMessage(getString(R.string.dialog_server_not_running_no_folder))
+                        .setPositiveButton(getString(R.string.choose_folder), (d, w) -> folderPickerLauncher.launch(null))
+                        .setNegativeButton(getString(R.string.cancel), null)
                         .show();
             } else {
                 new AlertDialog.Builder(this)
-                        .setTitle("Server Not Running")
-                        .setMessage("The server is currently stopped. Would you like to start the server now to share the QR code?")
-                        .setPositiveButton("Start Server", (d, w) -> {
+                        .setTitle(getString(R.string.dialog_server_not_running_title))
+                        .setMessage(getString(R.string.dialog_server_not_running_stopped))
+                        .setPositiveButton(getString(R.string.start_server), (d, w) -> {
                             startServerService();
                             mainHandler.postDelayed(this::showQrCodeDialog, 800);
                         })
-                        .setNegativeButton("Cancel", null)
+                        .setNegativeButton(getString(R.string.cancel), null)
                         .show();
             }
             return;
@@ -382,14 +383,14 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         tvUrl.setText(url);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Share Server via QR Code")
+                .setTitle(getString(R.string.dialog_share_qr_title))
                 .setView(dialogView)
-                .setPositiveButton("Close", null)
-                .setNeutralButton("Copy Link", (d, w) -> {
+                .setPositiveButton(getString(R.string.close), null)
+                .setNeutralButton(getString(R.string.dialog_copy_link), (d, w) -> {
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    ClipData clip = ClipData.newPlainText("PouchStream URL", url);
+                    ClipData clip = ClipData.newPlainText(getString(R.string.clip_label_url), url);
                     clipboard.setPrimaryClip(clip);
-                    Toast.makeText(this, "Copied URL to clipboard", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_copied_url), Toast.LENGTH_SHORT).show();
                 })
                 .create();
 
@@ -440,7 +441,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
                 runOnUiThread(() -> {
                     if (!isFinishing() && !isDestroyed() && qrDialog != null && qrDialog.isShowing()) {
                         progressBar.setVisibility(View.GONE);
-                        Toast.makeText(MainActivity.this, "Failed to generate QR code", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, getString(R.string.toast_failed_generate_qr), Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -449,9 +450,9 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
 
     private void showAboutDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("About PouchStream")
-                .setMessage("PouchStream by theonlyasdk\n\nA lightweight local server for media streaming and remote file management.")
-                .setPositiveButton("OK", null)
+                .setTitle(getString(R.string.about_title))
+                .setMessage(getString(R.string.about_message))
+                .setPositiveButton(getString(R.string.ok), null)
                 .show();
     }
 
@@ -509,9 +510,9 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
         updateKeepAwake(running);
         if (running) {
             boolean wasVisible = layoutUrlContainer.getVisibility() == View.VISIBLE;
-            tvStatus.setText("Running");
+            tvStatus.setText(getString(R.string.server_running));
             tvServerUrl.setText(url);
-            btnToggleServer.setText("Stop Server");
+            btnToggleServer.setText(getString(R.string.stop_server));
             btnToggleServer.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#C62828")));
             btnChooseFolder.setEnabled(false);
             btnToggleServer.setEnabled(true);
@@ -587,8 +588,8 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             }
         } else {
             boolean wasVisible = layoutUrlContainer.getVisibility() == View.VISIBLE;
-            tvStatus.setText("Stopped");
-            btnToggleServer.setText("Start Server");
+            tvStatus.setText(getString(R.string.server_stopped));
+            btnToggleServer.setText(getString(R.string.start_server));
             if (defaultButtonTint != null) {
                 btnToggleServer.setBackgroundTintList(defaultButtonTint);
             } else {
@@ -662,7 +663,7 @@ public class MainActivity extends AppCompatActivity implements ServerService.Ser
             updateUiState(running, url, true);
 
             if (error != null) {
-                Toast.makeText(this, "Server error: " + error, Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_server_error, error), Toast.LENGTH_LONG).show();
                 // Open logs activity if an error happens while starting the server
                 Intent logIntent = new Intent(MainActivity.this, LogActivity.class);
                 startActivity(logIntent);

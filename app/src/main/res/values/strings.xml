@@ -21,7 +21,7 @@
     <string name="server_starting">Starting</string>
     <string name="server_stopping">Stopping</string>
     <string name="web_access_url">Web Access URL</string>
-    <string name="url_placeholder">http://--:8080</string>
+    <string name="url_placeholder">http://—:8080</string>
     <string name="copy_url">Copy URL</string>
     <string name="open_browser">Open Browser</string>
     <string name="shared_folder">Shared Folder</string>
@@ -56,7 +56,7 @@
     <string name="toast_invalid_port">Invalid port number</string>
     <string name="toast_port_range_error">Port must be between 1024 and 65535</string>
     <string name="toast_cleared">Cleared %1$s and %2$d logs</string>
-    <string name="toast_restarting_server">Restarting server...</string>
+    <string name="toast_restarting_server">Restarting server…</string>
     <string name="toast_folder_reset">Folder selection reset</string>
     <string name="toast_settings_restored">Settings restored to default</string>
     <string name="toast_not_required">Not required on this Android version</string>
@@ -136,6 +136,13 @@
     <string name="dialog_choose_theme">Choose theme</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="settings_material_you">Material You</string>
+    <string name="settings_material_you_summary">Use system wallpaper colors</string>
+    <string name="settings_material_you_enabled">Enabled — system colors applied</string>
+    <string name="settings_material_you_disabled">Disabled — app blue theme</string>
+    <string name="toast_material_you_enabled">Material You enabled — restart to apply</string>
+    <string name="toast_material_you_disabled">Material You disabled</string>
+    <string name="toast_material_you_unavailable">Material You requires Android 12+</string>
     <string name="dialog_connection_security">Connection security</string>
     <string name="switch_require_auth">Require username &amp; password</string>
     <string name="hint_username">Username</string>
@@ -160,6 +167,8 @@
     <!-- Port options -->
     <string name="port_default">8080 (Default)</string>
     <string name="port_custom">Custom port…</string>
+    <string name="port_8080">8080</string>
+    <string name="ip_placeholder">127.0.0.1</string>
 
     <!-- Service / Notification -->
     <string name="notification_channel_name">PouchStream Background Server</string>
@@ -170,8 +179,8 @@
 
     <!-- Misc formats -->
     <string name="format_bytes_b">%1$d B</string>
-    <string name="format_bytes_kb">%.1f KB</string>
-    <string name="format_bytes_mb">%.1f MB</string>
-    <string name="format_storage_bytes">%.1f %1$s</string>
+    <string name="format_bytes_kb">%1$.1f KB</string>
+    <string name="format_bytes_mb">%1$.1f MB</string>
+    <string name="format_storage_bytes">%1$.1f %2$s</string>
     <string name="bytes_zero">0 B</string>
 </resources>

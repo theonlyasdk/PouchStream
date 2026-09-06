@@ -3,18 +3,18 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_qrcode"
-        android:title="Share QR Code"
+        android:title="@string/menu_share_qr"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_logs"
-        android:title="Server Logs"
+        android:title="@string/menu_server_logs"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_settings"
-        android:title="Settings"
+        android:title="@string/menu_settings"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_about"
-        android:title="About..."
+        android:title="@string/menu_about"
         app:showAsAction="never" />
 </menu>

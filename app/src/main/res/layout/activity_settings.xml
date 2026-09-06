@@ -10,7 +10,7 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        app:title="Settings"
+        app:title="@string/settings_title"
         app:navigationIcon="?attr/homeAsUpIndicator" />
 
     <ScrollView
@@ -32,7 +32,7 @@
                 android:paddingHorizontal="16dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="APPEARANCE"
+                android:text="@string/settings_section_appearance"
                 android:textColor="?attr/colorPrimary"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -53,7 +53,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Theme"
+                    android:text="@string/settings_theme"
                     android:textSize="16sp"
                     android:textColor="?android:textColorPrimary" />
 
@@ -62,9 +62,54 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="System default"
+                    android:text="@string/settings_theme_system_default"
                     android:textSize="14sp"
                     android:textColor="?android:textColorSecondary" />
+            </LinearLayout>
+
+            <!-- Setting: Material You dynamic colors -->
+            <LinearLayout
+                android:id="@+id/pref_material_you"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:minHeight="68dp"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_material_you"
+                        android:textColor="?android:textColorPrimary"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/tvPrefMaterialYouSummary"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/settings_material_you_summary"
+                        android:textColor="?android:textColorSecondary"
+                        android:textSize="14sp" />
+                </LinearLayout>
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/switchMaterialYou"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:clickable="false"
+                    android:focusable="false" />
             </LinearLayout>
 
             <View
@@ -81,7 +126,7 @@
                 android:paddingHorizontal="16dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="SERVER"
+                android:text="@string/settings_section_server"
                 android:textColor="?attr/colorPrimary"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -103,7 +148,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Server Port"
+                    android:text="@string/settings_server_port"
                     android:textSize="16sp"
                     android:textColor="?android:textColorPrimary" />
 
@@ -112,7 +157,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="8080"
+                    android:text="@string/port_8080"
                     android:textSize="14sp"
                     android:textColor="?android:textColorSecondary" />
             </LinearLayout>
@@ -134,7 +179,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Device IP Address"
+                    android:text="@string/settings_device_ip"
                     android:textSize="16sp"
                     android:textColor="?android:textColorPrimary" />
 
@@ -143,7 +188,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="127.0.0.1"
+                    android:text="@string/ip_placeholder"
                     android:textSize="14sp"
                     android:textColor="?android:textColorSecondary" />
             </LinearLayout>
@@ -161,7 +206,7 @@
                 android:paddingHorizontal="16dp"
                 android:paddingTop="12dp"
                 android:paddingBottom="8dp"
-                android:text="STORAGE"
+                android:text="@string/settings_section_storage"
                 android:textStyle="bold"
                 android:textSize="12sp"
                 android:letterSpacing="0.05"
@@ -184,7 +229,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Reset Shared Folder"
+                    android:text="@string/settings_reset_shared_folder"
                     android:textSize="16sp"
                     android:textColor="?android:textColorPrimary" />
 
@@ -193,7 +238,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Unlink currently selected folder"
+                    android:text="@string/settings_reset_shared_folder_summary"
                     android:textSize="14sp"
                     android:textColor="?android:textColorSecondary" />
             </LinearLayout>
@@ -212,7 +257,7 @@
                 android:paddingHorizontal="16dp"
                 android:paddingTop="12dp"
                 android:paddingBottom="8dp"
-                android:text="SYSTEM"
+                android:text="@string/settings_section_system"
                 android:textColor="?attr/colorPrimary"
                 android:textSize="12sp"
                 android:textStyle="bold" />
@@ -240,7 +285,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Autostart on boot"
+                        android:text="@string/settings_autostart"
                         android:textColor="?android:textColorPrimary"
                         android:textSize="16sp" />
 
@@ -249,7 +294,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Restarts server after reboot"
+                        android:text="@string/settings_autostart_summary"
                         android:textColor="?android:textColorSecondary"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -285,7 +330,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Read-only mode"
+                        android:text="@string/settings_readonly"
                         android:textColor="?android:textColorPrimary"
                         android:textSize="16sp" />
 
@@ -294,7 +339,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Blocks upload, delete and edit"
+                        android:text="@string/settings_readonly_summary"
                         android:textColor="?android:textColorSecondary"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -330,7 +375,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Keep screen &amp; Wi-Fi awake"
+                        android:text="@string/settings_keep_awake"
                         android:textColor="?android:textColorPrimary"
                         android:textSize="16sp" />
 
@@ -339,7 +384,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="High-perf Wi-Fi + screen on while running"
+                        android:text="@string/settings_keep_awake_summary"
                         android:textColor="?android:textColorSecondary"
                         android:textSize="14sp" />
                 </LinearLayout>
@@ -369,7 +414,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Connection security"
+                    android:text="@string/settings_connection_security"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
@@ -378,7 +423,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="No password"
+                    android:text="@string/settings_no_password"
                     android:textColor="?android:textColorSecondary"
                     android:textSize="14sp" />
             </LinearLayout>
@@ -400,7 +445,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Keep running in background"
+                    android:text="@string/settings_keep_running"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
@@ -409,7 +454,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Battery optimization"
+                    android:text="@string/settings_battery_optimization"
                     android:textColor="?android:textColorSecondary"
                     android:textSize="14sp" />
             </LinearLayout>
@@ -431,7 +476,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Server Logs"
+                    android:text="@string/settings_server_logs"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
@@ -439,7 +484,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="View recent activity and errors"
+                    android:text="@string/settings_server_logs_summary"
                     android:textColor="?android:textColorSecondary"
                     android:textSize="14sp" />
 
@@ -462,7 +507,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Clear cache &amp; logs"
+                    android:text="@string/settings_clear_cache"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
@@ -470,7 +515,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Free temp files and diagnostic logs"
+                    android:text="@string/settings_clear_cache_summary"
                     android:textColor="?android:textColorSecondary"
                     android:textSize="14sp" />
             </LinearLayout>
@@ -492,7 +537,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Reset to Defaults"
+                    android:text="@string/settings_reset_defaults"
                     android:textColor="?android:textColorPrimary"
                     android:textSize="16sp" />
 
@@ -500,7 +545,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Restore port and preferences to default"
+                    android:text="@string/settings_reset_defaults_summary"
                     android:textColor="?android:textColorSecondary"
                     android:textSize="14sp" />
 

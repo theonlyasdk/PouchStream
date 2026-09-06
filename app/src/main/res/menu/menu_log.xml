@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_copy_logs"
-        android:title="Copy All"
+        android:title="@string/menu_copy_all"
         app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_clear_logs"
-        android:title="Clear"
+        android:title="@string/menu_clear"
         app:showAsAction="ifRoom" />
 </menu>

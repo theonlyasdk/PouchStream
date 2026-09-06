@@ -43,13 +43,16 @@ public class SettingsActivity extends AppCompatActivity {
     private TextView tvPrefAutoStartSummary;
     private TextView tvPrefReadOnlySummary;
     private TextView tvPrefKeepAwakeSummary;
+    private TextView tvPrefMaterialYouSummary;
     private SwitchMaterial switchAutoStart;
     private SwitchMaterial switchReadOnly;
     private SwitchMaterial switchKeepAwake;
+    private SwitchMaterial switchMaterialYou;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         ThemeHelper.applyFromPrefs(this);
+        ThemeHelper.applyDynamicColorsIfAvailable(this);
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_settings);
@@ -73,6 +76,7 @@ public class SettingsActivity extends AppCompatActivity {
         updateSummaries();
         updateBatterySummary();
         updateThemeSummary();
+        updateMaterialYouSummary();
         updateAutoStartSummary();
         updateAuthSummary();
         updateReadOnlySummary();
@@ -89,12 +93,34 @@ public class SettingsActivity extends AppCompatActivity {
         tvPrefAutoStartSummary = findViewById(R.id.tvPrefAutoStartSummary);
         tvPrefReadOnlySummary = findViewById(R.id.tvPrefReadOnlySummary);
         tvPrefKeepAwakeSummary = findViewById(R.id.tvPrefKeepAwakeSummary);
+        tvPrefMaterialYouSummary = findViewById(R.id.tvPrefMaterialYouSummary);
         switchAutoStart = findViewById(R.id.switchAutoStart);
         switchReadOnly = findViewById(R.id.switchReadOnly);
         switchKeepAwake = findViewById(R.id.switchKeepAwake);
+        switchMaterialYou = findViewById(R.id.switchMaterialYou);
 
         // Theme
         findViewById(R.id.pref_theme).setOnClickListener(v -> showThemeDialog());
+
+        // Material You dynamic colors
+        View prefMaterialYou = findViewById(R.id.pref_material_you);
+        if (switchMaterialYou != null) {
+            boolean enabled = prefs.getBoolean(ThemeHelper.KEY_MATERIAL_YOU, false);
+            switchMaterialYou.setChecked(enabled);
+            updateMaterialYouSummary();
+            prefMaterialYou.setOnClickListener(v -> {
+                boolean newVal = !switchMaterialYou.isChecked();
+                if (newVal && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+                    Toast.makeText(this, getString(R.string.toast_material_you_unavailable), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                switchMaterialYou.setChecked(newVal);
+                prefs.edit().putBoolean(ThemeHelper.KEY_MATERIAL_YOU, newVal).apply();
+                updateMaterialYouSummary();
+                Toast.makeText(this, getString(newVal ? R.string.toast_material_you_enabled : R.string.toast_material_you_disabled), Toast.LENGTH_SHORT).show();
+                recreate();
+            });
+        }
 
         // Port
         findViewById(R.id.pref_port).setOnClickListener(v -> showPortDialog());
@@ -115,7 +141,7 @@ public class SettingsActivity extends AppCompatActivity {
                 switchAutoStart.setChecked(newVal);
                 prefs.edit().putBoolean(ServerService.KEY_AUTO_START, newVal).apply();
                 updateAutoStartSummary();
-                Toast.makeText(this, newVal ? "Autostart enabled" : "Autostart disabled", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(newVal ? R.string.toast_autostart_enabled : R.string.toast_autostart_disabled), Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -129,7 +155,7 @@ public class SettingsActivity extends AppCompatActivity {
                 switchReadOnly.setChecked(newVal);
                 prefs.edit().putBoolean(ServerService.KEY_READ_ONLY, newVal).apply();
                 updateReadOnlySummary();
-                Toast.makeText(this, newVal ? "Read-only enabled — writes blocked" : "Read-only disabled", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(newVal ? R.string.toast_readonly_enabled : R.string.toast_readonly_disabled), Toast.LENGTH_SHORT).show();
                 promptRestartServerIfNeeded("Read-Only Mode");
             });
         }
@@ -144,7 +170,7 @@ public class SettingsActivity extends AppCompatActivity {
                 switchKeepAwake.setChecked(newVal);
                 prefs.edit().putBoolean(ServerService.KEY_KEEP_AWAKE, newVal).apply();
                 updateKeepAwakeSummary();
-                Toast.makeText(this, newVal ? "Keep awake enabled" : "Keep awake disabled", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(newVal ? R.string.toast_keep_awake_enabled : R.string.toast_keep_awake_disabled), Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -179,23 +205,23 @@ public class SettingsActivity extends AppCompatActivity {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             boolean ignoring = pm != null && pm.isIgnoringBatteryOptimizations(getPackageName());
             if (ignoring) {
-                tvPrefBatterySummary.setText("Unrestricted — server stays alive in background");
+                tvPrefBatterySummary.setText(getString(R.string.settings_battery_unrestricted));
             } else {
-                tvPrefBatterySummary.setText("Optimized — tap to allow unrestricted");
+                tvPrefBatterySummary.setText(getString(R.string.settings_battery_optimized));
             }
         } else {
-            tvPrefBatterySummary.setText("Not required on this Android version");
+            tvPrefBatterySummary.setText(getString(R.string.settings_battery_not_required));
         }
     }
 
     private void requestIgnoreBatteryOptimization() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            Toast.makeText(this, "Not required on this Android version", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_not_required), Toast.LENGTH_SHORT).show();
             return;
         }
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (pm != null && pm.isIgnoringBatteryOptimizations(getPackageName())) {
-            Toast.makeText(this, "Already unrestricted", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, getString(R.string.toast_already_unrestricted), Toast.LENGTH_SHORT).show();
             return;
         }
         try {
@@ -206,7 +232,7 @@ public class SettingsActivity extends AppCompatActivity {
             try {
                 startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
             } catch (Exception ex) {
-                Toast.makeText(this, "Unable to open battery settings: " + ex.getMessage(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, getString(R.string.toast_unable_open_battery, ex.getMessage()), Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -223,24 +249,36 @@ public class SettingsActivity extends AppCompatActivity {
             String fullPath = StorageHelper.getFullDisplayPath(this, Uri.parse(folderUriStr));
             tvPrefFolderSummary.setText(fullPath);
         } else {
-            tvPrefFolderSummary.setText("No folder selected");
+            tvPrefFolderSummary.setText(getString(R.string.no_folder_selected));
         }
     }
 
     private void updateThemeSummary() {
         if (tvPrefThemeSummary == null) return;
         String theme = prefs.getString(ThemeHelper.KEY_THEME, ThemeHelper.THEME_SYSTEM);
-        tvPrefThemeSummary.setText(ThemeHelper.getThemeLabel(theme));
+        tvPrefThemeSummary.setText(ThemeHelper.getThemeLabel(this, theme));
+    }
+
+    private void updateMaterialYouSummary() {
+        if (tvPrefMaterialYouSummary == null) return;
+        boolean enabled = prefs.getBoolean(ThemeHelper.KEY_MATERIAL_YOU, false);
+        if (enabled && android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) {
+            tvPrefMaterialYouSummary.setText(getString(R.string.toast_material_you_unavailable));
+            if (switchMaterialYou != null) switchMaterialYou.setChecked(false);
+            return;
+        }
+        tvPrefMaterialYouSummary.setText(getString(enabled ? R.string.settings_material_you_enabled : R.string.settings_material_you_disabled));
+        if (switchMaterialYou != null) switchMaterialYou.setChecked(enabled);
     }
 
     private void showThemeDialog() {
         String current = prefs.getString(ThemeHelper.KEY_THEME, ThemeHelper.THEME_SYSTEM);
-        String[] labels = {"System default", "Light", "Dark"};
+        String[] labels = {getString(R.string.settings_theme_system_default), getString(R.string.theme_light), getString(R.string.theme_dark)};
         String[] values = {ThemeHelper.THEME_SYSTEM, ThemeHelper.THEME_LIGHT, ThemeHelper.THEME_DARK};
         int checked = 0;
         for (int i = 0; i < values.length; i++) if (values[i].equals(current)) checked = i;
         new AlertDialog.Builder(this)
-                .setTitle("Choose theme")
+                .setTitle(getString(R.string.dialog_choose_theme))
                 .setSingleChoiceItems(labels, checked, (d, which) -> {
                     String sel = values[which];
                     prefs.edit().putString(ThemeHelper.KEY_THEME, sel).apply();
@@ -248,28 +286,28 @@ public class SettingsActivity extends AppCompatActivity {
                     updateThemeSummary();
                     d.dismiss();
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 
     private void updateAutoStartSummary() {
         if (tvPrefAutoStartSummary == null) return;
         boolean enabled = prefs.getBoolean(ServerService.KEY_AUTO_START, true);
-        tvPrefAutoStartSummary.setText(enabled ? "Enabled — restarts after reboot" : "Disabled");
+        tvPrefAutoStartSummary.setText(getString(enabled ? R.string.settings_autostart_enabled : R.string.settings_autostart_disabled));
         if (switchAutoStart != null) switchAutoStart.setChecked(enabled);
     }
 
     private void updateReadOnlySummary() {
         if (tvPrefReadOnlySummary == null) return;
         boolean enabled = prefs.getBoolean(ServerService.KEY_READ_ONLY, false);
-        tvPrefReadOnlySummary.setText(enabled ? "Enabled — uploads & edits blocked" : "Disabled");
+        tvPrefReadOnlySummary.setText(getString(enabled ? R.string.settings_readonly_enabled : R.string.settings_readonly_disabled));
         if (switchReadOnly != null) switchReadOnly.setChecked(enabled);
     }
 
     private void updateKeepAwakeSummary() {
         if (tvPrefKeepAwakeSummary == null) return;
         boolean enabled = prefs.getBoolean(ServerService.KEY_KEEP_AWAKE, false);
-        tvPrefKeepAwakeSummary.setText(enabled ? "Enabled — Wi-Fi high-perf + screen on" : "Disabled");
+        tvPrefKeepAwakeSummary.setText(getString(enabled ? R.string.settings_keep_awake_enabled : R.string.settings_keep_awake_disabled));
         if (switchKeepAwake != null) switchKeepAwake.setChecked(enabled);
     }
 
@@ -277,10 +315,10 @@ public class SettingsActivity extends AppCompatActivity {
         if (tvPrefAuthSummary == null) return;
         boolean enabled = prefs.getBoolean(ServerService.KEY_AUTH_ENABLED, false);
         if (!enabled) {
-            tvPrefAuthSummary.setText("Disabled — anyone on Wi-Fi can access");
+            tvPrefAuthSummary.setText(getString(R.string.settings_auth_disabled_summary));
         } else {
             String user = prefs.getString(ServerService.KEY_AUTH_USER, "");
-            tvPrefAuthSummary.setText("Enabled — user: " + (user.isEmpty() ? "(not set)" : user));
+            tvPrefAuthSummary.setText(getString(R.string.settings_auth_enabled_summary, (user.isEmpty() ? getString(R.string.settings_auth_enabled_user_not_set) : user)));
         }
     }
 
@@ -296,7 +334,7 @@ public class SettingsActivity extends AppCompatActivity {
         container.setPadding(pad, padInner, pad, 0);
 
         SwitchMaterial enableSwitch = new SwitchMaterial(this);
-        enableSwitch.setText("Require username & password");
+        enableSwitch.setText(getString(R.string.switch_require_auth));
         enableSwitch.setChecked(enabled);
         LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         swLp.bottomMargin = (int) (16 * getResources().getDisplayMetrics().density);
@@ -304,7 +342,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         // Username — Material OutlinedBox, no bottom divider
         TextInputLayout tilUser = new TextInputLayout(this, null, com.google.android.material.R.attr.textInputOutlinedStyle);
-        tilUser.setHint("Username");
+        tilUser.setHint(getString(R.string.hint_username));
         tilUser.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
         tilUser.setBoxCornerRadii(0f, 0f, 0f, 0f);
         tilUser.setHintEnabled(true);
@@ -319,7 +357,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         // Password — Material OutlinedBox with toggle
         TextInputLayout tilPass = new TextInputLayout(this, null, com.google.android.material.R.attr.textInputOutlinedStyle);
-        tilPass.setHint("Password");
+        tilPass.setHint(getString(R.string.hint_password));
         tilPass.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE);
         tilPass.setBoxCornerRadii(0f, 0f, 0f, 0f);
         tilPass.setPasswordVisibilityToggleEnabled(true);
@@ -344,15 +382,15 @@ public class SettingsActivity extends AppCompatActivity {
         toggleFields.onClick(null);
 
         new AlertDialog.Builder(this)
-                .setTitle("Connection security")
+                .setTitle(getString(R.string.dialog_connection_security))
                 .setView(container)
-                .setPositiveButton("Save", (d, w) -> {
+                .setPositiveButton(getString(R.string.save), (d, w) -> {
                     boolean wantEnabled = enableSwitch.isChecked();
                     String user = etUser.getText() != null ? etUser.getText().toString().trim() : "";
                     String pass = etPass.getText() != null ? etPass.getText().toString() : "";
                     if (wantEnabled) {
                         if (user.isEmpty() || pass.isEmpty()) {
-                            Toast.makeText(this, "Username and password required", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, getString(R.string.toast_password_required), Toast.LENGTH_SHORT).show();
                             return;
                         }
                         prefs.edit()
@@ -360,20 +398,20 @@ public class SettingsActivity extends AppCompatActivity {
                                 .putString(ServerService.KEY_AUTH_USER, user)
                                 .putString(ServerService.KEY_AUTH_PASS, pass)
                                 .apply();
-                        Toast.makeText(this, "Password protection enabled", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.toast_password_enabled), Toast.LENGTH_SHORT).show();
                         promptRestartServerIfNeeded("Password Protection");
                     } else {
                         prefs.edit().putBoolean(ServerService.KEY_AUTH_ENABLED, false).apply();
-                        Toast.makeText(this, "Password protection disabled", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.toast_password_disabled), Toast.LENGTH_SHORT).show();
                         promptRestartServerIfNeeded("Password Protection");
                     }
                     updateAuthSummary();
                 })
-                .setNegativeButton("Cancel", null)
-                .setNeutralButton("Disable", (d, w) -> {
+                .setNegativeButton(getString(R.string.cancel), null)
+                .setNeutralButton(getString(R.string.disable), (d, w) -> {
                     prefs.edit().putBoolean(ServerService.KEY_AUTH_ENABLED, false).apply();
                     updateAuthSummary();
-                    Toast.makeText(this, "Password protection disabled", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_password_disabled), Toast.LENGTH_SHORT).show();
                     promptRestartServerIfNeeded("Password Protection");
                 })
                 .show();
@@ -382,20 +420,20 @@ public class SettingsActivity extends AppCompatActivity {
     private void showClearCacheDialog() {
         long cacheBytes = getDirSize(getCacheDir()) + getDirSize(getExternalCacheDir());
         int logCount = AppLogger.getAllLogs().size();
-        String msg = "Clear " + formatBytes(cacheBytes) + " of temp files and " + logCount + " log entries?\n\nThis frees space and clears diagnostic logs.";
+        String msg = getString(R.string.dialog_clear_cache_message, formatBytes(cacheBytes), logCount);
         new AlertDialog.Builder(this)
-                .setTitle("Clear cache & logs")
+                .setTitle(getString(R.string.dialog_clear_cache_title))
                 .setMessage(msg)
-                .setPositiveButton("Clear", (d, w) -> {
+                .setPositiveButton(getString(R.string.clear), (d, w) -> {
                     int logsCleared = logCount;
                     AppLogger.clear();
                     long freed = clearDir(getCacheDir()) + clearDir(getExternalCacheDir());
                     // Also clear NanoHTTPD temp files in cache
                     File codeCache = getCodeCacheDir();
                     if (codeCache != null) clearDir(codeCache);
-                    Toast.makeText(this, "Cleared " + formatBytes(freed) + " and " + logsCleared + " logs", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_cleared, formatBytes(freed), logsCleared), Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 
@@ -440,11 +478,11 @@ public class SettingsActivity extends AppCompatActivity {
      * Dialog with preset choice list or custom port input.
      */
     private void showPortDialog() {
-        final String[] portOptions = {"8080 (Default)", "8000", "8888", "Custom port..."};
+        final String[] portOptions = {getString(R.string.port_default), "8000", "8888", getString(R.string.port_custom)};
         final int[] portValues = {8080, 8000, 8888, -1};
 
         new AlertDialog.Builder(this)
-                .setTitle("Select Server Port")
+                .setTitle(getString(R.string.dialog_select_port))
                 .setItems(portOptions, (dialog, which) -> {
                     int selected = portValues[which];
                     if (selected == -1) {
@@ -453,7 +491,7 @@ public class SettingsActivity extends AppCompatActivity {
                         savePort(selected);
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 
@@ -472,23 +510,23 @@ public class SettingsActivity extends AppCompatActivity {
         container.addView(input);
 
         new AlertDialog.Builder(this)
-                .setTitle("Custom Server Port")
-                .setMessage("Enter a port number between 1024 and 65535:")
+                .setTitle(getString(R.string.dialog_custom_port))
+                .setMessage(getString(R.string.dialog_custom_port_message))
                 .setView(container)
-                .setPositiveButton("Save", (dialog, which) -> {
+                .setPositiveButton(getString(R.string.save), (dialog, which) -> {
                     String str = input.getText().toString().trim();
                     try {
                         int port = Integer.parseInt(str);
                         if (port < 1024 || port > 65535) {
-                            Toast.makeText(this, "Port must be between 1024 and 65535", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(this, getString(R.string.toast_port_range_error), Toast.LENGTH_SHORT).show();
                         } else {
                             savePort(port);
                         }
                     } catch (NumberFormatException e) {
-                        Toast.makeText(this, "Invalid port number", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, getString(R.string.toast_invalid_port), Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 
@@ -496,7 +534,7 @@ public class SettingsActivity extends AppCompatActivity {
         int oldPort = prefs.getInt(ServerService.KEY_PORT, 8080);
         prefs.edit().putInt(ServerService.KEY_PORT, port).apply();
         tvPrefPortSummary.setText(String.valueOf(port));
-        Toast.makeText(this, "Port set to " + port, Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, getString(R.string.toast_port_set_to, port), Toast.LENGTH_SHORT).show();
         if (oldPort != port) {
             promptRestartServerIfNeeded("Server Port (" + port + ")");
         }
@@ -505,9 +543,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void promptRestartServerIfNeeded(String settingName) {
         if (!ServerService.isRunning()) return;
         new AlertDialog.Builder(this)
-                .setTitle("Restart Server?")
-                .setMessage(settingName + " changed while the server is running. Would you like to restart it now to apply changes?")
-                .setPositiveButton("Restart Now", (d, w) -> {
+                .setTitle(getString(R.string.dialog_restart_server_title))
+                .setMessage(getString(R.string.dialog_restart_server_message, settingName))
+                .setPositiveButton(getString(R.string.dialog_restart_now), (d, w) -> {
                     Intent restartIntent = new Intent(this, ServerService.class);
                     restartIntent.setAction(ServerService.ACTION_START);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -515,22 +553,22 @@ public class SettingsActivity extends AppCompatActivity {
                     } else {
                         startService(restartIntent);
                     }
-                    Toast.makeText(this, "Restarting server...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_restarting_server), Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Later", null)
+                .setNegativeButton(getString(R.string.later), null)
                 .show();
     }
 
     private void showIpDialog() {
         String ip = NetworkUtils.getLocalIpAddress(this);
         new AlertDialog.Builder(this)
-                .setTitle("Device IP Address")
-                .setMessage("Local IPv4 Address:\n" + ip + "\n\nClients on the same local Wi-Fi or Hotspot can access PouchStream through this address.")
-                .setPositiveButton("Copy IP", (dialog, which) -> {
+                .setTitle(getString(R.string.dialog_device_ip_title))
+                .setMessage(getString(R.string.dialog_device_ip_message, ip))
+                .setPositiveButton(getString(R.string.dialog_copy_ip), (dialog, which) -> {
                     ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    ClipData clip = ClipData.newPlainText("IP Address", ip);
+                    ClipData clip = ClipData.newPlainText(getString(R.string.clip_label_ip), ip);
                     clipboard.setPrimaryClip(clip);
-                    Toast.makeText(this, "Copied IP to clipboard", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_copied_ip), Toast.LENGTH_SHORT).show();
                 })
                 .setNegativeButton("Close", null)
                 .show();
@@ -538,28 +576,29 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void showResetFolderDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("Reset Shared Folder")
-                .setMessage("Unlink the currently selected directory? You will be prompted to pick a folder again on the main screen.")
-                .setPositiveButton("Unlink", (dialog, which) -> {
+                .setTitle(getString(R.string.dialog_reset_folder_title))
+                .setMessage(getString(R.string.dialog_reset_folder_message))
+                .setPositiveButton(getString(R.string.dialog_unlink), (dialog, which) -> {
                     prefs.edit()
                             .remove(ServerService.KEY_FOLDER_URI)
                             .remove(ServerService.KEY_FOLDER_NAME)
                             .apply();
-                    tvPrefFolderSummary.setText("No folder selected");
-                    Toast.makeText(this, "Folder selection reset", Toast.LENGTH_SHORT).show();
+                    tvPrefFolderSummary.setText(getString(R.string.no_folder_selected));
+                    Toast.makeText(this, getString(R.string.toast_folder_reset), Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 
     private void showResetDefaultsDialog() {
         new AlertDialog.Builder(this)
-                .setTitle("Reset to Defaults")
-                .setMessage("Reset all settings to default values (Port 8080, theme system, autostart on, no password)?")
-                .setPositiveButton("Reset", (dialog, which) -> {
+                .setTitle(getString(R.string.dialog_reset_defaults_title))
+                .setMessage(getString(R.string.dialog_reset_defaults_message))
+                .setPositiveButton(getString(R.string.reset), (dialog, which) -> {
                     prefs.edit()
                             .putInt(ServerService.KEY_PORT, 8080)
                             .putString(ThemeHelper.KEY_THEME, ThemeHelper.THEME_SYSTEM)
+                            .putBoolean(ThemeHelper.KEY_MATERIAL_YOU, false)
                             .putBoolean(ServerService.KEY_AUTO_START, true)
                             .putBoolean(ServerService.KEY_AUTH_ENABLED, false)
                             .putBoolean(ServerService.KEY_READ_ONLY, false)
@@ -568,14 +607,15 @@ public class SettingsActivity extends AppCompatActivity {
                     ThemeHelper.applyTheme(ThemeHelper.THEME_SYSTEM);
                     updateSummaries();
                     updateThemeSummary();
+                    updateMaterialYouSummary();
                     updateAutoStartSummary();
                     updateAuthSummary();
                     updateReadOnlySummary();
                     updateKeepAwakeSummary();
-                    Toast.makeText(this, "Settings restored to default", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, getString(R.string.toast_settings_restored), Toast.LENGTH_SHORT).show();
                     promptRestartServerIfNeeded("Settings");
                 })
-                .setNegativeButton("Cancel", null)
+                .setNegativeButton(getString(R.string.cancel), null)
                 .show();
     }
 }

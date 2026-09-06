@@ -27,6 +27,8 @@ public class LogActivity extends AppCompatActivity implements AppLogger.LogListe
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        ThemeHelper.applyFromPrefs(this);
+        ThemeHelper.applyDynamicColorsIfAvailable(this);
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_log);
@@ -53,7 +55,7 @@ public class LogActivity extends AppCompatActivity implements AppLogger.LogListe
     private void renderLogs() {
         String allLogs = AppLogger.getAllLogsText();
         if (TextUtils.isEmpty(allLogs.trim())) {
-            tvLogs.setText("No logs recorded yet.");
+            tvLogs.setText(getString(R.string.no_logs_recorded));
         } else {
             tvLogs.setText(allLogs);
             scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
@@ -86,9 +88,9 @@ public class LogActivity extends AppCompatActivity implements AppLogger.LogListe
             String logs = AppLogger.getAllLogsText();
             if (!logs.isEmpty()) {
                 ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                ClipData clip = ClipData.newPlainText("Server Logs", logs);
+                ClipData clip = ClipData.newPlainText(getString(R.string.clip_label_logs), logs);
                 clipboard.setPrimaryClip(clip);
-                Toast.makeText(this, "Logs copied to clipboard", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, getString(R.string.toast_logs_copied), Toast.LENGTH_SHORT).show();
             }
             return true;
         } else if (id == R.id.action_clear_logs) {
@@ -102,7 +104,7 @@ public class LogActivity extends AppCompatActivity implements AppLogger.LogListe
     public void onNewLog(String logEntry) {
         runOnUiThread(() -> {
             String current = tvLogs.getText().toString();
-            if (current.equals("No logs recorded yet.")) {
+            if (current.equals(getString(R.string.no_logs_recorded))) {
                 tvLogs.setText(logEntry + "\n");
             } else {
                 tvLogs.append(logEntry + "\n");
@@ -113,6 +115,6 @@ public class LogActivity extends AppCompatActivity implements AppLogger.LogListe
 
     @Override
     public void onLogsCleared() {
-        runOnUiThread(() -> tvLogs.setText("No logs recorded yet."));
+        runOnUiThread(() -> tvLogs.setText(getString(R.string.no_logs_recorded)));
     }
 }

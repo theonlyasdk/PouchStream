@@ -1,7 +1,15 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Base application theme - dark, unified accent -->
     <style name="Base.Theme.PouchStream" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="colorPrimary">@color/brand_primary</item>
+        <item name="colorPrimaryVariant">@color/brand_primary_dark</item>
+        <item name="colorOnPrimary">@color/brand_on_primary</item>
+        <item name="colorSecondary">@color/brand_primary</item>
+        <item name="colorSecondaryVariant">@color/brand_primary_dark</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="colorControlActivated">@color/brand_primary</item>
+        <item name="colorControlHighlight">@color/brand_primary_container</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.PouchStream.MaterialAlertDialog</item>
+        <item name="alertDialogTheme">@style/ThemeOverlay.PouchStream.AlertDialog</item>
     </style>
 </resources>

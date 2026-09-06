@@ -5,4 +5,7 @@
     <color name="status_running">#2E7D32</color>
     <color name="status_stopped">#C62828</color>
     <color name="brand_primary">#1E88E5</color>
+    <color name="brand_primary_dark">#1565C0</color>
+    <color name="brand_primary_container">#BBDEFB</color>
+    <color name="brand_on_primary">#FFFFFF</color>
 </resources>
