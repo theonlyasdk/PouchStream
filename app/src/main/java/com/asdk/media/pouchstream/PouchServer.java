@@ -98,7 +98,8 @@ public class PouchServer extends NanoHTTPD {
 
         try {
             if (!"/api/poll".equals(uri)) {
-                AppLogger.log("HTTP", method + " " + uri + (session.getQueryParameterString() != null ? "?" + session.getQueryParameterString() : ""));
+                // Sanitized logging: do not include query string or sensitive details to avoid info leakage
+                AppLogger.log("HTTP", method + " " + sanitizePath(uri));
             }
             Response response;
             if (uri.startsWith("/api/")) {
@@ -109,10 +110,10 @@ public class PouchServer extends NanoHTTPD {
             addCorsHeaders(response);
             return response;
         } catch (Exception e) {
-            AppLogger.log("HTTP", "Error processing " + method + " " + uri + ": " + e.getMessage(), e);
+            AppLogger.log("HTTP", "Error processing " + method + " " + sanitizePath(uri), e);
             JSONObject err = new JSONObject();
             try {
-                err.put("error", e.getMessage() != null ? e.getMessage() : "Unknown error");
+                err.put("error", "Internal error");
             } catch (Exception ignored) {}
             Response errResponse = newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "application/json", err.toString());
             addCorsHeaders(errResponse);
@@ -378,7 +379,7 @@ public class PouchServer extends NanoHTTPD {
             }
 
             default:
-                return errorResponse(Response.Status.NOT_FOUND, "API endpoint not found: " + uri);
+                return errorResponse(Response.Status.NOT_FOUND, "API endpoint not found");
         }
     }
 
@@ -410,7 +411,7 @@ public class PouchServer extends NanoHTTPD {
             String cleanPath = pathParam != null ? pathParam : "";
             targetDoc = storageHelper.findByRelativePath(cleanPath);
             if (targetDoc == null) {
-                return errorResponse(Response.Status.NOT_FOUND, "Target not found: " + cleanPath);
+                return errorResponse(Response.Status.NOT_FOUND, "Target not found");
             }
             if (targetDoc.isFile()) {
                 String fileName = targetDoc.getName();
@@ -462,7 +463,7 @@ public class PouchServer extends NanoHTTPD {
                 }
                 zos.finish();
             } catch (Exception e) {
-                AppLogger.log("PouchServer", "Zip streaming interrupted or completed: " + e.getMessage());
+                AppLogger.log("PouchServer", "Zip streaming interrupted or completed", e);
             } finally {
                 try {
                     pos.close();
@@ -530,7 +531,7 @@ public class PouchServer extends NanoHTTPD {
 
         DocumentFile doc = storageHelper.findByRelativePath(path);
         if (doc == null || !doc.isFile()) {
-            return errorResponse(Response.Status.NOT_FOUND, "File not found: " + path);
+            return errorResponse(Response.Status.NOT_FOUND, "File not found");
         }
 
         long fileLen = doc.length();
@@ -709,6 +710,14 @@ public class PouchServer extends NanoHTTPD {
         response.addHeader("Access-Control-Allow-Origin", "*");
         response.addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
         response.addHeader("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Range, Authorization");
+    }
+
+    private String sanitizePath(String path) {
+        if (path == null) return "/";
+        // Strip query, limit length to avoid log injection, keep only safe chars
+        String s = path.split("\\?")[0];
+        if (s.length() > 100) s = s.substring(0, 100);
+        return s.replaceAll("[\\r\\n]", "_");
     }
 
     private Response jsonResponse(JSONObject json) {

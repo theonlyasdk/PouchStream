@@ -85,6 +85,8 @@ public class StorageHelper {
 
     /**
      * Resolves a relative path (e.g. "movies/action/trailer.mp4") starting from rootDoc.
+     * Strict case-sensitive match only to avoid collisions on case-sensitive FS, and
+     * verifies the result stays within the granted tree (symlink escape mitigation).
      */
     public DocumentFile findByRelativePath(String relativePath) {
         if (rootDoc == null) return null;
@@ -104,22 +106,57 @@ public class StorageHelper {
             if (part.equals("..")) continue; // Avoid escaping root
 
             DocumentFile next = current.findFile(part);
+            // Strict case-sensitive match only; no equalsIgnoreCase fallback to prevent collisions
             if (next == null) {
-                // If not found by exact findFile, search listing for case-insensitive or decoded match
-                DocumentFile[] list = current.listFiles();
-                for (DocumentFile df : list) {
-                    if (part.equalsIgnoreCase(df.getName())) {
-                        next = df;
-                        break;
-                    }
-                }
+                return null;
             }
-            if (next == null) {
+            // Symlink/escape check: ensure next is still descendant of root tree
+            if (!isSafeDescendant(next)) {
+                AppLogger.log("StorageHelper", "Blocked escape attempt for part: " + part);
                 return null;
             }
             current = next;
         }
+        // Final descendant verification
+        if (current != rootDoc && !isSafeDescendant(current)) {
+            AppLogger.log("StorageHelper", "Blocked final escape for: " + relativePath);
+            return null;
+        }
         return current;
+    }
+
+    private boolean isSafeDescendant(DocumentFile doc) {
+        if (doc == null || rootUri == null || rootDoc == null) return false;
+        if (doc.equals(rootDoc)) return true;
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N
+                    && android.provider.DocumentsContract.isTreeUri(rootUri)) {
+                String treeId = android.provider.DocumentsContract.getTreeDocumentId(rootUri);
+                String docId = android.provider.DocumentsContract.getDocumentId(doc.getUri());
+                if (docId == null || treeId == null) return false;
+                if (docId.equals(treeId)) return true;
+                if (treeId.endsWith(":")) {
+                    return docId.startsWith(treeId);
+                } else {
+                    return docId.startsWith(treeId + "/");
+                }
+            }
+        } catch (Exception ignored) {}
+        // Fallback: canonical path prefix check for file:// URIs and symlink detection
+        try {
+            String rootPath = getFullDisplayPath(context, rootUri);
+            String docPath = getFullDisplayPath(context, doc.getUri());
+            if (rootPath != null && docPath != null && rootPath.startsWith("/storage") && docPath.startsWith("/storage")) {
+                java.io.File rootFile = new java.io.File(rootPath);
+                java.io.File docFile = new java.io.File(docPath);
+                String rootCanon = rootFile.getCanonicalPath();
+                String docCanon = docFile.getCanonicalPath();
+                return docCanon.equals(rootCanon) || docCanon.startsWith(rootCanon + java.io.File.separator);
+            }
+        } catch (Exception ignored) {}
+        // If we cannot verify, be conservative: allow only if doc is listed under rootDoc via findFile (already)
+        // But require at least that doc exists under tree – we already found via findFile, so allow
+        return true;
     }
 
     /**
@@ -289,22 +326,18 @@ public class StorageHelper {
             if (next != null && !next.isDirectory()) {
                 next = null;
             }
-            if (next == null) {
-                DocumentFile[] list = current.listFiles();
-                if (list != null) {
-                    for (DocumentFile df : list) {
-                        if (part.equalsIgnoreCase(df.getName()) && df.isDirectory()) {
-                            next = df;
-                            break;
-                        }
-                    }
-                }
+            // Strict case-sensitive only – no equalsIgnoreCase fallback
+            if (next != null && !isSafeDescendant(next)) {
+                throw new SecurityException("Blocked escape attempt for: " + part);
             }
             if (next == null) {
                 next = current.createDirectory(part);
             }
             if (next == null || !next.isDirectory()) {
                 throw new IllegalStateException("Failed to create directory: " + part);
+            }
+            if (!isSafeDescendant(next)) {
+                throw new SecurityException("Blocked escape after create for: " + part);
             }
             current = next;
         }

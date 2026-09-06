@@ -238,13 +238,14 @@ public class ServerService extends Service {
         stopServerSilently();
 
         String ip = NetworkUtils.getLocalIpAddress(this);
-        synchronized (STATE_LOCK) { serverUrl = "http://" + ip + ":" + port; }
+        String preliminaryUrl = "http://" + ip + ":" + port;
+        synchronized (STATE_LOCK) { serverUrl = preliminaryUrl; }
 
-        AppLogger.log("ServerService", "Starting server on " + serverUrl + " (folder: " + storage.getRootName() + ")");
+        AppLogger.log("ServerService", "Starting server on " + preliminaryUrl + " (folder: " + storage.getRootName() + ")");
 
         // Promote to foreground IMMEDIATELY (required within ~5s on Android 14+)
         // Build preliminary notification before server binds to avoid ANR/timeouts
-        Notification preliminary = buildNotification(serverUrl, storage.getRootName());
+        Notification preliminary = buildNotification(preliminaryUrl, storage.getRootName());
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 ServiceCompat.startForeground(this, NOTIFICATION_ID, preliminary,
