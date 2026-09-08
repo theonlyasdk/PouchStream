@@ -107,6 +107,14 @@ export const UI = {
         return mime.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif'].includes(ext);
     },
 
+    isDoubleClickNav() {
+        try {
+            return localStorage.getItem('ui.nav:double_click_nav') !== 'false';
+        } catch (_) {
+            return true;
+        }
+    },
+
     isEditable(item) {
         if (item.isDirectory) return false;
         const ext = (item.extension || '').toLowerCase();
@@ -229,9 +237,13 @@ export const UI = {
                 <td class="text-end" style="width: 160px;"></td>
             `;
 
-            // Single click selects parent directory row
+            // Single click selects parent directory row (or navigates up when double-click nav is off)
             trParent.addEventListener('click', (e) => {
                 if (e.target.closest('.inline-rename-input') || e.target.closest('.table-action-group')) return;
+                if (!UI.isDoubleClickNav()) {
+                    onNavigate(State.meta.parentPath || '');
+                    return;
+                }
                 State.selectedPaths.clear();
                 const allRows = tbody.querySelectorAll('tr');
                 allRows.forEach(r => r.classList.remove('row-selected'));
@@ -347,9 +359,14 @@ export const UI = {
                 </td>
             `;
 
-            // Single click selects item; double click opens item
+            // Single click selects item (or opens folders directly when double-click nav is off); double click opens item
             tr.addEventListener('click', (e) => {
                 if (e.target.closest('.inline-rename-input') || e.target.closest('.table-action-group')) return;
+
+                if (item.isDirectory && !UI.isDoubleClickNav()) {
+                    onNavigate(item.path);
+                    return;
+                }
 
                 if (e.ctrlKey || e.metaKey) {
                     if (State.selectedPaths.has(item.path)) {
@@ -428,6 +445,10 @@ export const UI = {
                 if (chk) { chk.style.display = sel ? 'block' : 'none'; chk.checked = sel; }
             };
             if (iconCell) {
+                // Never navigate from the checkbox square (single or double click) — selection only
+                iconCell.addEventListener('dblclick', (e) => {
+                    e.stopPropagation();
+                });
                 iconCell.addEventListener('click', (e) => {
                     e.stopPropagation();
                     if (State.selectedPaths.has(item.path)) State.selectedPaths.delete(item.path);

@@ -13,14 +13,14 @@ Lightweight local file server for Android — stream and manage files over Wi-Fi
 ## Run
 ```bash
 # dev web server (Windows)
-python dev_server.py          # http://localhost:8080  shared: dev_shared_folder
+python tools/dev_server.py      # http://localhost:8080  shared: testdata/dev_sample_data
 # or
-run_dev_server.bat
+tools/run_dev_server.bat
 
 # Android
 ./gradlew assembleDebug
 ./gradlew assembleRelease     # signed with debug keystore
-build_and_sign_apk.bat        # builds debug + release
+tools/build_and_sign_apk.bat  # builds debug + release
 adb install -r -t app/build/outputs/apk/release/app-release.apk
 ```
 

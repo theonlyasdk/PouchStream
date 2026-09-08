@@ -16,8 +16,9 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, unquote
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-WEB_DIR = os.path.join(SCRIPT_DIR, "app", "src", "main", "assets", "web")
-DEFAULT_SHARED_DIR = os.path.join(SCRIPT_DIR, "dev_shared_folder")
+PROJECT_ROOT = os.path.normpath(os.path.join(SCRIPT_DIR, ".."))
+WEB_DIR = os.path.join(PROJECT_ROOT, "app", "src", "main", "assets", "web")
+DEFAULT_SHARED_DIR = os.path.join(PROJECT_ROOT, "testdata", "dev_sample_data")
 
 # Ensure common media/web types are registered
 mimetypes.add_type("video/mp4", ".mp4")

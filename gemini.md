@@ -32,17 +32,17 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"; ./gradlew assemb
 - Output APK: `app/build/outputs/apk/release/app-release.apk`
 - Or use the automated batch script:
   ```cmd
-  .\build_and_sign_apk.bat
+  .\tools\build_and_sign_apk.bat
   ```
 
 ### 4. Run Desktop Development Server (Python)
 Simulates the Android server and serves the Web UI from `app/src/main/assets/web`:
 ```powershell
-python dev_server.py
+python tools/dev_server.py
 # Or with custom port/folder:
-python dev_server.py --port 8080 --folder dev_shared_folder
+python tools/dev_server.py --port 8080 --folder testdata/dev_sample_data
 # Or batch script:
-.\run_dev_server.bat
+.\tools\run_dev_server.bat
 ```
 - Web Portal: `http://localhost:8080`
 

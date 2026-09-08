@@ -212,7 +212,15 @@ async function navigateTo(path, silent = false, pushHistory = true) {
         history.pushState({ path }, '', window.location.pathname);
     }
 
+    const prevPath = State.currentPath;
     State.setPath(path);
+
+    // Drop stale selection when entering a different folder, otherwise the
+    // previously selected row keeps the bulk-actions bar open in the new folder.
+    if (State.currentPath !== prevPath && State.selectedPaths.size > 0) {
+        State.clearSelection();
+        window.dispatchEvent(new CustomEvent('pouch:selectionChanged'));
+    }
 
     // Make sure in-content editor / video / image / settings / rename are closed when navigating folders manually
     if (!silent) {
@@ -517,6 +525,33 @@ function setupSettingsPage() {
 
         chkAutoHide.addEventListener('change', (e) => {
             updateAutoHide(e.target.checked);
+        });
+    }
+
+    // 6. Double-Click Navigation Full-Row Button & Switch
+    const rowDblClickNav = document.getElementById('rowSettingDblClickNav');
+    const chkDblClickNav = document.getElementById('settingDblClickNav');
+    if (rowDblClickNav && chkDblClickNav) {
+        try {
+            const saved = localStorage.getItem('ui.nav:double_click_nav');
+            if (saved !== null) {
+                chkDblClickNav.checked = saved === 'true';
+            }
+        } catch (_) {}
+
+        const updateDblClickNav = (val) => {
+            chkDblClickNav.checked = val;
+            try {
+                localStorage.setItem('ui.nav:double_click_nav', val ? 'true' : 'false');
+            } catch (_) {}
+        };
+
+        rowDblClickNav.addEventListener('click', () => {
+            updateDblClickNav(!chkDblClickNav.checked);
+        });
+
+        chkDblClickNav.addEventListener('change', (e) => {
+            updateDblClickNav(e.target.checked);
         });
     }
 }

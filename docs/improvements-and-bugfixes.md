@@ -20,7 +20,7 @@ This document outlines identified bugs, proposed feature additions, and architec
 ### 1.2 HTTP Range Suffix-Byte-Range Calculation Bug (RFC 7233 / 9110 Violation)
 - **Files:**
   - [`app/src/main/java/com/asdk/media/pouchstream/PouchServer.java`](file:///c:/Users/User/AndroidStudioProjects/PouchStream/app/src/main/java/com/asdk/media/pouchstream/PouchServer.java#L378-L400)
-  - [`dev_server.py`](file:///c:/Users/User/AndroidStudioProjects/PouchStream/dev_server.py#L274-L281)
+  - [`dev_server.py`](file:///c:/Users/User/AndroidStudioProjects/PouchStream/tools/dev_server.py#L274-L281)
 - **Root Cause:** When an HTTP client or media player sends a suffix byte-range header like `Range: bytes=-50000` (requesting the last 50 KB of a file, standard behavior for media players locating trailer metadata or MP4 `moov` atoms), `dashIdx` is `0`, `startStr` is `""`, and `endStr` is `"50000"`. The current logic leaves `start = 0` and sets `end = 50000`, returning the **first** 50 KB instead of the last 50 KB.
 - **Impact:** Video streaming fails to seek to the end or fails to initialize playback on players that inspect file footers.
 - **Solution:** Handle suffix byte ranges according to RFC 7233:
