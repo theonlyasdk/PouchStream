@@ -217,6 +217,7 @@ export const UI = {
             const selCount = allPaths.filter(p => State.selectedPaths.has(p)).length;
             chkAll.checked = allPaths.length > 0 && selCount === allPaths.length;
             chkAll.indeterminate = selCount > 0 && selCount < allPaths.length;
+            chkAll.style.visibility = State.selectedPaths.size > 1 ? 'visible' : 'hidden';
         }
 
         const items = State.getFilteredItems();

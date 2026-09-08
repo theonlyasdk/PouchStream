@@ -1485,22 +1485,27 @@ tr:hover .star-btn { opacity: 1; pointer-events: auto; }
 .row-icon { display: block !important; }
 tr:hover .row-chk, tr.row-selected .row-chk { display: block !important; }
 tr:hover .row-icon, tr.row-selected .row-icon { display: none !important; }
-/* Bulk actions bar slide-down */
+/* Bulk actions bar slide-up (bottom overlay above statusbar, no layout shift) */
 .bulk-actions-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32px;
+  z-index: 20;
   max-height: 0;
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(8px);
   overflow: hidden;
   transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease, transform 0.35s cubic-bezier(0.4,0,0.2,1);
   pointer-events: none;
-  border-bottom: 0 !important;
+  border-top: 0 !important;
 }
 .bulk-actions-bar.show {
   max-height: 42px;
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
-  border-bottom: 1px solid #495057 !important;
+  border-top: 1px solid #495057 !important;
 }
 /* Favourite click pop effect */
 @keyframes favPop { 0% { transform: scale(1); } 30% { transform: scale(1.35); } 60% { transform: scale(0.92); } 100% { transform: scale(1); } }

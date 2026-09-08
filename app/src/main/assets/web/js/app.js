@@ -590,6 +590,7 @@ function setupBulkActions() {
             const c = all.filter(p => State.selectedPaths.has(p)).length;
             chkAll.checked = all.length > 0 && c === all.length;
             chkAll.indeterminate = c > 0 && c < all.length;
+            chkAll.style.visibility = sel > 1 ? 'visible' : 'hidden';
         }
     };
     // merged count/clear: hover shows Clear

@@ -180,22 +180,6 @@
                     </div>
                 </div>
 
-                <!-- Bulk Actions Bar — flush like toolbar (full-height border-start, merged count/clear on hover) -->
-                <div class="bulk-actions-bar d-none align-items-stretch justify-content-between border-bottom" id="bulkActionsBar" style="background-color:#070707; border-color:#495057 !important; height:42px;">
-                    <div class="d-flex align-items-stretch">
-                        <button type="button" class="portal-header-btn border-end" id="btnBulkCount" title="Hover to clear" style="min-width:120px; justify-content:center;">
-                            <span id="bulkSelectedCount">0 selected</span>
-                            <span id="bulkClearHover" class="d-none align-items-center gap-1"><ion-icon name="close"></ion-icon> Clear</span>
-                        </button>
-                    </div>
-                    <div class="d-flex align-items-stretch">
-                        <button type="button" class="portal-header-btn border-start" id="btnBulkZip" title="Download selected as ZIP"><ion-icon name="archive-outline"></ion-icon><span>Download ZIP</span></button>
-                        <button type="button" class="portal-header-btn border-start" id="btnBulkDownload" title="Download selected"><ion-icon name="download"></ion-icon><span>Download</span></button>
-                        <button type="button" class="portal-header-btn border-start" id="btnBulkMove" title="Move to folder"><ion-icon name="folder-open"></ion-icon><span>Move</span></button>
-                        <button type="button" class="portal-header-btn border-start" id="btnBulkDelete" title="Delete selected"><ion-icon name="trash"></ion-icon><span>Delete</span></button>
-                    </div>
-                </div>
-
                 <!-- Drag & Drop Overlay -->
                 <div class="workspace-drop-overlay d-none flex-column align-items-center justify-content-center position-absolute top-0 start-0 w-100 h-100" id="workspaceDropOverlay" style="background:rgba(0,0,0,0.85); z-index:30; border:2px dashed #0d6efd;">
                     <ion-icon name="cloud-upload" style="font-size:3rem; color:#0d6efd;"></ion-icon>
@@ -239,7 +223,7 @@
                         <table class="table table-sm table-hover table-dense table-fixed align-middle mb-0">
                             <thead class="sticky-top">
                                 <tr class="small">
-                                    <th scope="col" class="text-center p-0" style="width:36px; vertical-align:middle;"><div style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; margin:0 auto;"><input type="checkbox" id="chkSelectAll" class="form-check-input m-0" title="Select all" style="width:16px; height:16px; margin:0; cursor:pointer;"></div></th>
+                                    <th scope="col" class="text-center p-0" style="width:36px; vertical-align:middle;"><div style="width:22px; height:22px; display:flex; align-items:center; justify-content:center; margin:0 auto;"><input type="checkbox" id="chkSelectAll" class="form-check-input m-0" title="Select all" style="width:16px; height:16px; margin:0; cursor:pointer; visibility:hidden;"></div></th>
                                     <th scope="col" class="sortable-header" data-sort="name" style="padding-left:11px !important;">
                                         Name <span class="sort-indicator ms-1" id="sortIndicatorName"></span>
                                     </th>
@@ -987,6 +971,22 @@
                         </div>
                     </div>
                     <audio id="audioPlayerElement" preload="metadata" class="d-none"></audio>
+                </div>
+
+                <!-- Bulk Actions Bar — bottom overlay above statusbar (slides up, no layout shift) -->
+                <div class="bulk-actions-bar d-none align-items-stretch justify-content-start border-top" id="bulkActionsBar" style="background-color:#070707; border-color:#495057 !important; height:42px;">
+                    <div class="d-flex align-items-stretch">
+                        <button type="button" class="portal-header-btn border-end" id="btnBulkCount" title="Hover to clear" style="min-width:120px; justify-content:center;">
+                            <span id="bulkSelectedCount">0 selected</span>
+                            <span id="bulkClearHover" class="d-none align-items-center gap-1"><ion-icon name="close"></ion-icon> Clear</span>
+                        </button>
+                    </div>
+                    <div class="d-flex align-items-stretch">
+                        <button type="button" class="portal-header-btn" id="btnBulkZip" title="Download selected as ZIP"><ion-icon name="archive-outline"></ion-icon><span>Download ZIP</span></button>
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkDownload" title="Download selected"><ion-icon name="download"></ion-icon><span>Download</span></button>
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkMove" title="Move to folder"><ion-icon name="folder-open"></ion-icon><span>Move</span></button>
+                        <button type="button" class="portal-header-btn border-start" id="btnBulkDelete" title="Delete selected"><ion-icon name="trash"></ion-icon><span>Delete</span></button>
+                    </div>
                 </div>
 
                 <!-- Fixed Bottom Statusbar -->
