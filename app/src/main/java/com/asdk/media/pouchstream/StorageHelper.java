@@ -534,6 +534,12 @@ public class StorageHelper {
                 return "application/pdf";
             case "zip":
                 return "application/zip";
+            case "woff":
+                return "font/woff";
+            case "woff2":
+                return "font/woff2";
+            case "ttf":
+                return "font/ttf";
             default:
                 String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
                 if (mime != null) return mime;

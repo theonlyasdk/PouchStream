@@ -27,6 +27,9 @@ mimetypes.add_type("video/x-matroska", ".mkv")
 mimetypes.add_type("text/markdown", ".md")
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("font/woff2", ".woff2")
+mimetypes.add_type("font/woff", ".woff")
+mimetypes.add_type("font/ttf", ".ttf")
 
 def create_sample_files(target_dir):
     """Creates sample files and folders in the test directory if empty, for testing the UI."""

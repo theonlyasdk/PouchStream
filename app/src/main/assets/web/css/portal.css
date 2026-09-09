@@ -1,5 +1,5 @@
 /* PouchStream OLED High-Density Enterprise Styles */
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap');
+/* Fonts loaded via local /fonts/fonts.css */
 
 [data-bs-theme="dark"] {
     --bs-body-bg: #000000;
